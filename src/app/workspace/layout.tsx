@@ -26,6 +26,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { UserMenu } from "@/components/user-menu";
 import { useProjectStore } from "@/stores/project-store";
 
 const MODELS = [
@@ -84,6 +85,7 @@ export default function WorkspaceLayout({
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <SettingsIcon className="h-4 w-4" />
           </Button>
+          <UserMenu />
         </div>
       </header>
 

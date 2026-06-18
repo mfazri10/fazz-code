@@ -1,5 +1,5 @@
-import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
+import { supabase } from "@/lib/supabase";
 
 type Project = Database["public"]["Tables"]["projects"]["Row"];
 type File = Database["public"]["Tables"]["files"]["Row"];
