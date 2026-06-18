@@ -58,13 +58,13 @@ function buildTree(files: string[]): FileTreeNode[] {
 function FileTreeItem({
   node,
   depth = 0,
-  activeFile,
+  selectedFile,
   onSelect,
   onDelete,
 }: {
   node: FileTreeNode;
   depth?: number;
-  activeFile: string | null;
+  selectedFile: string | null;
   onSelect: (path: string) => void;
   onDelete: (path: string) => void;
 }) {
@@ -96,7 +96,7 @@ function FileTreeItem({
               key={child.path}
               node={child}
               depth={depth + 1}
-              activeFile={activeFile}
+              selectedFile={selectedFile}
               onSelect={onSelect}
               onDelete={onDelete}
             />
@@ -109,7 +109,7 @@ function FileTreeItem({
     <div className="group flex items-center">
       <button
         className={`flex flex-1 items-center gap-1 px-2 py-1 text-sm rounded-sm ${
-          activeFile === node.path
+          selectedFile === node.path
             ? "bg-accent text-accent-foreground"
             : "hover:bg-accent/50"
         }`}
@@ -135,15 +135,15 @@ function FileTreeItem({
 }
 
 export function FileTree() {
-  const { files, activeFile, setActiveFile, deleteFile } = useProjectStore();
+  const { files, selectedFile, setSelectedFile, deleteFile } = useProjectStore();
 
   const tree = buildTree(files.map((f) => f.path));
 
   const handleSelect = useCallback(
     (path: string) => {
-      setActiveFile(path);
+      setSelectedFile(path);
     },
-    [setActiveFile]
+    [setSelectedFile]
   );
 
   const handleDelete = useCallback(
@@ -174,7 +174,7 @@ export function FileTree() {
             <FileTreeItem
               key={node.path}
               node={node}
-              activeFile={activeFile}
+              selectedFile={selectedFile}
               onSelect={handleSelect}
               onDelete={handleDelete}
             />

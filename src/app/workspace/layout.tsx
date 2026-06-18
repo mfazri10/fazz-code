@@ -9,8 +9,11 @@ import {
   MessageSquareIcon,
   SettingsIcon,
 } from "lucide-react";
+import { useState } from "react";
 
+import { AgentStatusPanel } from "@/components/agent-status";
 import { ChatPanel } from "@/components/chat-panel";
+import { CommandPalette } from "@/components/command-palette";
 import { EditorPanel } from "@/components/editor-panel";
 import { FileTree } from "@/components/file-tree";
 import { PreviewPanel } from "@/components/preview-panel";
@@ -27,7 +30,10 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { UserMenu } from "@/components/user-menu";
+import { VersionHistory } from "@/components/version-history";
 import { useProjectStore } from "@/stores/project-store";
+
+type MobileTab = "chat" | "editor" | "preview";
 
 const MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
@@ -41,6 +47,7 @@ export default function WorkspaceLayout({
   children: React.ReactNode;
 }) {
   const { selectedModel, setSelectedModel } = useProjectStore();
+  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
 
   const currentModel = MODELS.find((m) => m.id === selectedModel) ?? MODELS[0]!;
 
@@ -52,6 +59,9 @@ export default function WorkspaceLayout({
           <span className="text-sm font-semibold tracking-tight">
             Fazz Code
           </span>
+
+          {/* Command Palette */}
+          <CommandPalette />
 
           {/* Model Selector */}
           <DropdownMenu>
@@ -79,6 +89,7 @@ export default function WorkspaceLayout({
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <FolderPlusIcon className="h-4 w-4" />
           </Button>
+          <VersionHistory />
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <DownloadIcon className="h-4 w-4" />
           </Button>
@@ -89,8 +100,33 @@ export default function WorkspaceLayout({
         </div>
       </header>
 
-      {/* Three-pane resizable layout */}
-      <ResizablePanelGroup className="flex-1" {...({ direction: "horizontal" } as Record<string, unknown>)}>
+      {/* Agent Status */}
+      <AgentStatusPanel />
+
+      {/* Mobile Tab Switcher */}
+      <div className="flex md:hidden border-b">
+        {([
+          { id: "chat" as const, label: "Chat", icon: MessageSquareIcon },
+          { id: "editor" as const, label: "Editor", icon: CodeIcon },
+          { id: "preview" as const, label: "Preview", icon: EyeIcon },
+        ]).map((tab) => (
+          <button
+            key={tab.id}
+            className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
+              mobileTab === tab.id
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+            onClick={() => setMobileTab(tab.id)}
+          >
+            <tab.icon className="h-3.5 w-3.5" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Three-pane resizable layout (desktop) */}
+      <ResizablePanelGroup className="flex-1 hidden md:flex" {...({ direction: "horizontal" } as Record<string, unknown>)}>
         {/* Left: Chat Panel */}
         <ResizablePanel
           defaultSize={25}
@@ -158,6 +194,13 @@ export default function WorkspaceLayout({
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      {/* Mobile Panels */}
+      <div className="flex-1 flex md:hidden overflow-hidden">
+        {mobileTab === "chat" && <ChatPanel />}
+        {mobileTab === "editor" && <EditorPanel />}
+        {mobileTab === "preview" && <PreviewPanel />}
+      </div>
 
       {children}
     </div>

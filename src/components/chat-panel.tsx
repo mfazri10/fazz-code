@@ -272,6 +272,27 @@ export function ChatPanel() {
                 ) : (
                   <p className="text-sm">{getTextContent(message)}</p>
                 )}
+
+                {/* Token tracking */}
+                {message.role === "assistant" && (message.tokens || message.cost) && (
+                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                    {message.tokens && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
+                        {message.tokens.toLocaleString()} tokens
+                      </span>
+                    )}
+                    {message.cost !== undefined && message.cost > 0 && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-yellow-500/10 px-1.5 py-0.5 text-yellow-600">
+                        ${message.cost.toFixed(4)}
+                      </span>
+                    )}
+                    {message.model && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
+                        {message.model.split("/").pop()}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {message.role === "user" && (
