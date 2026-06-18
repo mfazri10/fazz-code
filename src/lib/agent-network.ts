@@ -11,6 +11,8 @@ export interface NetworkOptions {
   skipReview?: boolean;
   maxFixIterations?: number;
   onProgress?: (stage: string, message: string) => void;
+  onComplete?: (summary: string) => void;
+  onError?: (error: Error) => void;
 }
 
 export async function runNetwork({
@@ -20,6 +22,8 @@ export async function runNetwork({
   skipReview = false,
   maxFixIterations = 3,
   onProgress,
+  onComplete,
+  onError,
 }: NetworkOptions): Promise<void> {
   const store = useProjectStore.getState();
 
@@ -71,9 +75,11 @@ export async function runNetwork({
     }
 
     onProgress?.("done", "Generation complete!");
+    onComplete?.("Generation complete!");
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     onProgress?.("error", err.message);
+    onError?.(err);
     throw err;
   }
 }

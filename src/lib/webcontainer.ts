@@ -3,7 +3,16 @@ import { WebContainer } from "@webcontainer/api";
 let instance: WebContainer | null = null;
 let bootPromise: Promise<WebContainer> | null = null;
 
+// Check if we're in a browser environment
+function isBrowser(): boolean {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
 export async function getWebContainer(): Promise<WebContainer> {
+  if (!isBrowser()) {
+    throw new Error("WebContainer can only be used in the browser");
+  }
+
   if (instance) return instance;
   if (bootPromise) return bootPromise;
 
@@ -108,9 +117,20 @@ export async function startDevServer(): Promise<{
   });
 }
 
+export function isWebContainerSupported(): boolean {
+  if (!isBrowser()) return false;
+  return typeof WebContainer !== "undefined";
+}
+
+export function getWebContainerInstance(): WebContainer | null {
+  return instance;
+}
+
 export function onPreviewReady(
   callback: (port: number, url: string) => void
 ): () => void {
+  if (!isBrowser()) return () => {};
+
   const wc = instance;
   if (!wc) {
     console.warn("WebContainer not booted yet");

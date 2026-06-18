@@ -1,17 +1,16 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
 import {
   Check,
   Copy,
   Loader2,
-  RotateCcw,
   Send,
   Sparkles,
   Square,
   User,
+  Wrench,
 } from "lucide-react";
-import { useEffect,useRef, useState } from "react";
+import { useCallback,useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -20,16 +19,22 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { runNetwork } from "@/lib/agent-network";
 import { useProjectStore } from "@/stores/project-store";
 
 export function ChatPanel() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [currentStage, setCurrentStage] = useState("");
 
-  const { messages, sendMessage, stop, regenerate, error } = useChat();
-  const { isGenerating, runStatus } = useProjectStore();
-
-  const isLoading = isGenerating || (messages.length > 0 && messages[messages.length - 1]?.role !== "user");
+  const {
+    messages,
+    addMessage,
+    isGenerating,
+    selectedModel,
+  } = useProjectStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,29 +42,89 @@ export function ChatPanel() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamingContent]);
 
-  const handleCopy = async (text: string, id: string) => {
+  const handleCopy = useCallback(async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    sendMessage({ text: input });
-    setInput("");
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
       e.preventDefault();
-      handleSubmit(e as unknown as React.FormEvent);
-    }
-  };
+      if (!input.trim() || isGenerating) return;
 
-  const getTextContent = (message: { parts?: Array<{ type: string; text?: string }> }) => {
+      const userPrompt = input;
+      setInput("");
+
+      // Add user message
+      addMessage({
+        id: crypto.randomUUID(),
+        role: "user",
+        content: userPrompt,
+        timestamp: new Date(),
+        status: "done",
+      });
+
+      // Run agent network
+      setIsStreaming(true);
+      setStreamingContent("");
+      setCurrentStage("starting");
+
+      try {
+        await runNetwork({
+          prompt: userPrompt,
+          model: selectedModel,
+          onProgress: (stage, message) => {
+            setCurrentStage(stage);
+            setStreamingContent(message);
+          },
+          onComplete: () => {
+            setStreamingContent("");
+            setCurrentStage("");
+          },
+          onError: (error) => {
+            addMessage({
+              id: crypto.randomUUID(),
+              role: "system",
+              content: `Error: ${error.message}`,
+              timestamp: new Date(),
+              status: "error",
+            });
+          },
+        });
+      } finally {
+        setIsStreaming(false);
+        setStreamingContent("");
+        setCurrentStage("");
+      }
+    },
+    [input, isGenerating, selectedModel, addMessage]
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSubmit(e as unknown as React.FormEvent);
+      }
+    },
+    [handleSubmit]
+  );
+
+  const handleStop = useCallback(() => {
+    // TODO: Implement stop generation
+    setIsStreaming(false);
+    setStreamingContent("");
+    setCurrentStage("");
+  }, []);
+
+  const getTextContent = (message: {
+    parts?: Array<{ type: string; text?: string }>;
+    content?: string;
+  }) => {
+    if (message.content) return message.content;
     return (
       message.parts
         ?.filter((p) => p.type === "text")
@@ -68,22 +133,45 @@ export function ChatPanel() {
     );
   };
 
-  const getToolCalls = (message: { parts?: Array<{ type: string; toolName?: string; args?: Record<string, unknown> }> }) => {
-    return (
-      message.parts
-        ?.filter((p) => p.type === "tool-invocation")
-        .map((p) => ({
-          toolName: p.toolName || "unknown",
-          args: p.args,
-        })) || []
-    );
+  const getStageLabel = (stage: string): string => {
+    switch (stage) {
+      case "planning":
+        return "Planning...";
+      case "generating":
+        return "Generating code...";
+      case "reviewing":
+        return "Reviewing...";
+      case "fixing":
+        return "Fixing errors...";
+      case "done":
+        return "Complete!";
+      case "error":
+        return "Error";
+      default:
+        return "Processing...";
+    }
+  };
+
+  const getStageIcon = (stage: string) => {
+    switch (stage) {
+      case "planning":
+        return <Sparkles className="h-3 w-3" />;
+      case "generating":
+        return <Loader2 className="h-3 w-3 animate-spin" />;
+      case "reviewing":
+        return <Check className="h-3 w-3" />;
+      case "fixing":
+        return <Wrench className="h-3 w-3" />;
+      default:
+        return <Loader2 className="h-3 w-3 animate-spin" />;
+    }
   };
 
   return (
     <div className="flex h-full flex-col">
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-4">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Sparkles className="h-8 w-8 mb-3 opacity-50" />
               <p className="text-sm font-medium">Start building</p>
@@ -107,30 +195,23 @@ export function ChatPanel() {
                 </div>
               )}
 
+              {message.role === "system" && (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                  <Wrench className="h-4 w-4 text-destructive" />
+                </div>
+              )}
+
               <div
                 className={`max-w-[85%] rounded-lg px-3 py-2 ${
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
+                    : message.role === "system"
+                    ? "bg-destructive/10 text-destructive"
                     : "bg-muted"
                 }`}
               >
                 {message.role === "assistant" ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
-                    {/* Tool calls */}
-                    {getToolCalls(message).length > 0 && (
-                      <div className="mb-2 space-y-1">
-                        {getToolCalls(message).map((tc, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 text-xs text-muted-foreground bg-background/50 rounded px-2 py-1"
-                          >
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            <span className="font-mono">{tc.toolName}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -194,32 +275,23 @@ export function ChatPanel() {
             </div>
           ))}
 
-          {isLoading && (
+          {/* Streaming indicator */}
+          {isStreaming && (
             <div className="flex gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                {getStageIcon(currentStage)}
               </div>
               <div className="rounded-lg bg-muted px-3 py-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  {runStatus === "generating"
-                    ? "Generating code..."
-                    : runStatus === "planning"
-                    ? "Planning..."
-                    : runStatus === "reviewing"
-                    ? "Reviewing..."
-                    : runStatus === "fixing"
-                    ? "Fixing errors..."
-                    : "Thinking..."}
+                  {getStageIcon(currentStage)}
+                  <span>{getStageLabel(currentStage)}</span>
                 </div>
+                {streamingContent && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {streamingContent}
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <p className="font-medium">Error</p>
-              <p className="text-xs mt-1">{error.message}</p>
             </div>
           )}
         </div>
@@ -236,12 +308,12 @@ export function ChatPanel() {
             rows={2}
           />
           <div className="flex flex-col gap-1">
-            {isLoading ? (
+            {isStreaming ? (
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
-                onClick={stop}
+                onClick={handleStop}
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -250,20 +322,14 @@ export function ChatPanel() {
                 <Send className="h-4 w-4" />
               </Button>
             )}
-            {!isLoading && messages.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => regenerate()}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </form>
         <p className="mt-1.5 text-[10px] text-muted-foreground">
-          Press <kbd className="rounded border px-1 py-0.5 text-[9px]">Cmd+Enter</kbd> to send
+          Press{" "}
+          <kbd className="rounded border px-1 py-0.5 text-[9px]">
+            ⌘ Enter
+          </kbd>{" "}
+          to send
         </p>
       </div>
     </div>

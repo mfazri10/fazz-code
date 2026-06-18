@@ -1,14 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase environment variables");
+// Browser client (lazy initialization)
+let _supabase: ReturnType<typeof createClient> | null = null;
+
+export function getSupabaseClient() {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Missing Supabase environment variables");
+    }
+    _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return _supabase;
 }
 
-// Browser client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// For backward compatibility
+export const supabase = typeof window !== "undefined" 
+  ? getSupabaseClient() 
+  : createClient("https://placeholder.supabase.co", "placeholder");
 
 // Server client (with service role key for admin operations)
 export function createServerClient() {
