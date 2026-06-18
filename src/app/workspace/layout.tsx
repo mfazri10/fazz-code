@@ -15,6 +15,7 @@ import { useState } from "react";
 import { AgentStatusPanel } from "@/components/agent-status";
 import { ChatPanel } from "@/components/chat-panel";
 import { CommandPalette } from "@/components/command-palette";
+import { ComponentLibrary } from "@/components/component-library";
 import { DataModelPanel } from "@/components/data-model-panel";
 import { EditorPanel } from "@/components/editor-panel";
 import { FileTree } from "@/components/file-tree";
@@ -121,6 +122,7 @@ export default function WorkspaceLayout({
             <VersionHistory />
             <DataModelPanel />
             <RouteManager />
+            <ComponentLibrary />
             <Button variant="ghost" size="icon" className="h-6 w-6" title="Download">
               <DownloadIcon className="h-4 w-4" />
             </Button>
