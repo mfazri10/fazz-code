@@ -290,7 +290,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 ref={iframeRef}
                 src={previewUrl}
                 className="h-full w-full"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-forms allow-popups"
               />
             </div>
           </div>

@@ -1,7 +1,6 @@
 import { generateText } from "ai";
 
 import { getModel } from "@/lib/model-gateway";
-import { useProjectStore } from "@/stores/project-store";
 
 const REVIEWER_SYSTEM_PROMPT = `You are Fazz Code Reviewer, an expert at reviewing code quality and suggesting improvements.
 
@@ -41,46 +40,23 @@ export interface ReviewResult {
 }
 
 export async function runReviewer(
-  model: string = "gpt-4o"
+  model: string = "gpt-4o",
+  files: Record<string, string> = {}
 ): Promise<ReviewResult> {
-  const store = useProjectStore.getState();
-  store.setRunStatus("reviewing");
+  const fileContext = Object.entries(files)
+    .map(([path, content]) => `\n### ${path}\n\`\`\`\n${content}\n\`\`\``)
+    .join("\n");
 
-  try {
-    const fileContext = store.files
-      .map((f) => `\n### ${f.path}\n\`\`\`${f.language}\n${f.content}\n\`\`\``)
-      .join("\n");
+  const result = await generateText({
+    model: getModel(model),
+    system: REVIEWER_SYSTEM_PROMPT,
+    prompt: `Review these files:${fileContext}`,
+  });
 
-    const result = await generateText({
-      model: getModel(model),
-      system: REVIEWER_SYSTEM_PROMPT,
-      prompt: `Review these files:${fileContext}`,
-    });
-
-    // Parse JSON
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Failed to parse review JSON");
-    }
-
-    const review: ReviewResult = JSON.parse(jsonMatch[0]);
-
-    // Add review message
-    const emoji = review.verdict === "approve" ? "✅" : "⚠️";
-    store.addMessage({
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: `${emoji} **Review: ${review.verdict}**\n\n${review.summary}${
-        review.issues.length > 0
-          ? `\n\n**Issues:**\n${review.issues.map((i) => `- [${i.severity}] \`${i.file}\`: ${i.detail}`).join("\n")}`
-          : ""
-      }`,
-      timestamp: new Date(),
-      status: "done",
-    });
-
-    return review;
-  } finally {
-    store.setRunStatus("idle");
+  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Failed to parse review JSON");
   }
+
+  return JSON.parse(jsonMatch[0]) as ReviewResult;
 }

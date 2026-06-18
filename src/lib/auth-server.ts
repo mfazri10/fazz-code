@@ -3,16 +3,16 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 export async function getSession() {
-  const session = await auth.api.getSession({
+  const result = await auth.api.getSession({
     headers: await headers(),
   });
-  return session;
+  return result; // { session, user } or null
 }
 
 export async function requireAuth() {
-  const session = await getSession();
-  if (!session) {
+  const result = await getSession();
+  if (!result?.session) {
     throw new Error("Unauthorized");
   }
-  return session;
+  return result;
 }

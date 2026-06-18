@@ -1,9 +1,3 @@
-import { runGenerator } from "@/lib/agent-loop";
-import { runFixer } from "@/lib/fixer-agent";
-import { type PlanResult,runPlanner } from "@/lib/planner-agent";
-import { runReviewer } from "@/lib/reviewer-agent";
-import { useProjectStore } from "@/stores/project-store";
-
 export interface NetworkOptions {
   prompt: string;
   model?: string;
@@ -25,56 +19,75 @@ export async function runNetwork({
   onComplete,
   onError,
 }: NetworkOptions): Promise<void> {
-  const store = useProjectStore.getState();
-
   try {
-    // Stage 1: Planning
-    let plan: PlanResult | null = null;
-    if (!skipPlan) {
-      onProgress?.("planning", "Creating plan...");
-      plan = await runPlanner(prompt, model);
-      onProgress?.("planning", `Plan: ${plan.summary}`);
-    }
+    onProgress?.("starting", "Starting agent pipeline...");
 
-    // Stage 2: Generation
-    onProgress?.("generating", "Generating code...");
-    await runGenerator({
-      prompt: plan
-        ? `Generate the following based on this plan:\n\n${JSON.stringify(plan, null, 2)}\n\nOriginal request: ${prompt}`
-        : prompt,
-      model,
-      onProgress: (msg) => onProgress?.("generating", msg),
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        model,
+        skipPlan,
+        skipReview,
+        maxFixIterations,
+      }),
     });
 
-    // Stage 3: Self-heal loop (if errors)
-    let iteration = 0;
-    while (iteration < maxFixIterations) {
-      const errors = store.errors;
-      if (errors.length === 0) break;
-
-      onProgress?.("fixing", `Fix attempt ${iteration + 1}/${maxFixIterations}...`);
-      await runFixer(errors, model);
-      iteration++;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Request failed" }));
+      throw new Error(err.error || `HTTP ${res.status}`);
     }
 
-    // Stage 4: Review (optional, cross-model)
-    if (!skipReview) {
-      onProgress?.("reviewing", "Reviewing code...");
-      const reviewModel = model.includes("claude") ? "gpt-4o" : "claude-sonnet-4-20250514";
-      const review = await runReviewer(reviewModel);
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No response stream");
 
-      if (review.verdict === "request_changes" && review.issues.some((i) => i.severity === "error")) {
-        onProgress?.("fixing", "Applying review fixes...");
-        await runFixer(
-          review.issues
-            .filter((i) => i.severity === "error")
-            .map((i) => ({ file: i.file, message: i.detail, severity: i.severity })),
-          model
-        );
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+
+          if (data.stage === "error") {
+            throw new Error(data.message);
+          }
+
+          if (data.stage === "done") {
+            onProgress?.("done", "Generation complete!");
+            onComplete?.("Generation complete!");
+            return;
+          }
+
+          const stageMsg: Record<string, string> = {
+            planning: data.status === "done"
+              ? `Plan: ${data.plan?.summary ?? "created"}`
+              : "Creating plan...",
+            generating: data.status === "done"
+              ? "Code generated"
+              : "Generating code...",
+            fixing: `Fix attempt ${data.iteration ?? "?"} (${data.remainingErrors ?? "?"} errors left)`,
+            reviewing: data.status === "done"
+              ? "Review complete"
+              : "Reviewing code...",
+          };
+
+          onProgress?.(data.stage, stageMsg[data.stage] ?? data.status);
+        } catch {
+          // skip malformed lines
+        }
       }
     }
 
-    onProgress?.("done", "Generation complete!");
     onComplete?.("Generation complete!");
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
