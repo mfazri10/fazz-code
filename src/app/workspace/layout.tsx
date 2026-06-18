@@ -19,6 +19,7 @@ import { DataModelPanel } from "@/components/data-model-panel";
 import { EditorPanel } from "@/components/editor-panel";
 import { FileTree } from "@/components/file-tree";
 import { PreviewPanel } from "@/components/preview-panel";
+import { RouteManager } from "@/components/route-manager";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -119,6 +120,7 @@ export default function WorkspaceLayout({
             </Button>
             <VersionHistory />
             <DataModelPanel />
+            <RouteManager />
             <Button variant="ghost" size="icon" className="h-6 w-6" title="Download">
               <DownloadIcon className="h-4 w-4" />
             </Button>
