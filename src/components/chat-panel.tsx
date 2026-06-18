@@ -29,8 +29,13 @@ export function ChatPanel() {
   const [streamingContent, setStreamingContent] = useState("");
   const [currentStage, setCurrentStage] = useState("");
 
-  const { messages, addMessage, isGenerating, selectedModel } =
+  const { messages, addMessage, isGenerating, selectedModel, files, selectedFile, project } =
     useProjectStore();
+
+  // Build files map for AI context
+  const filesMap = Object.fromEntries(
+    files.map((f) => [f.path, f.content])
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -88,6 +93,9 @@ export function ChatPanel() {
         await runNetwork({
           prompt: userPrompt,
           model: selectedModel,
+          files: filesMap,
+          activeFile: selectedFile || undefined,
+          projectName: project?.name,
           onProgress: (stage, message) => {
             setCurrentStage(stage);
             setStreamingContent(message);
@@ -114,7 +122,7 @@ export function ChatPanel() {
         setCurrentStage("");
       }
     },
-    [input, isGenerating, selectedModel, addMessage]
+    [input, isGenerating, selectedModel, addMessage, filesMap, selectedFile, project?.name]
   );
 
   const handleKeyDown = useCallback(

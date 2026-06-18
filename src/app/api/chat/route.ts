@@ -1,6 +1,7 @@
 import { type ModelMessage, streamText } from "ai";
 
 import { getSession } from "@/lib/auth-server";
+import { buildFullSystemPrompt } from "@/lib/context/context-assembler";
 import { getModel } from "@/lib/model-gateway";
 import { chatSchema } from "@/lib/validations";
 
@@ -49,21 +50,30 @@ export async function POST(req: Request) {
   }
 
   const { messages, model } = parsed.data;
+
+  // Extract context from request body (optional fields)
+  const bodyObj = body as Record<string, unknown>;
+  const files = (bodyObj.files as Record<string, string>) || {};
+  const activeFile = bodyObj.activeFile as string | undefined;
+  const projectName = bodyObj.projectName as string | undefined;
+
+  // Build dynamic system prompt with full context awareness
+  const systemPrompt =
+    Object.keys(files).length > 0
+      ? buildFullSystemPrompt({
+          prompt: messages[messages.length - 1]?.content || "",
+          files,
+          activeFilePath: activeFile,
+          projectName,
+          tokenBudget: 80_000,
+        })
+      : `You are Fazz Code, an expert AI code generator. Generate clean, production-ready code using TypeScript, React/Next.js App Router, Tailwind CSS, and shadcn/ui components. When generating code, use code blocks with the filename format: \`\`\`tsx filename="src/app/page.tsx".`;
+
   const recentMessages = messages.slice(-20) as ModelMessage[];
 
   const result = streamText({
     model: getModel(model),
-    system: `You are Fazz Code, an expert AI code generator. You help users build web applications by generating clean, production-ready code.
-
-When generating code:
-- Always use TypeScript
-- Use React/Next.js App Router conventions
-- Use Tailwind CSS for styling
-- Use shadcn/ui components when appropriate
-- Write clean, well-structured code with proper types
-- Explain what you're building briefly before generating code
-
-When asked to create UI components or pages, provide the complete file contents in code blocks with the filename as the language identifier (e.g. \`\`\`tsx filename="src/app/page.tsx").`,
+    system: systemPrompt,
     messages: recentMessages,
   });
 

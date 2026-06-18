@@ -4,6 +4,9 @@ export interface NetworkOptions {
   skipPlan?: boolean;
   skipReview?: boolean;
   maxFixIterations?: number;
+  files?: Record<string, string>;
+  activeFile?: string;
+  projectName?: string;
   onProgress?: (stage: string, message: string) => void;
   onComplete?: (summary: string) => void;
   onError?: (error: Error) => void;
@@ -15,6 +18,9 @@ export async function runNetwork({
   skipPlan = false,
   skipReview = false,
   maxFixIterations = 3,
+  files,
+  activeFile,
+  projectName,
   onProgress,
   onComplete,
   onError,
@@ -31,6 +37,9 @@ export async function runNetwork({
         skipPlan,
         skipReview,
         maxFixIterations,
+        ...(files && { files }),
+        ...(activeFile && { activeFile }),
+        ...(projectName && { projectName }),
       }),
     });
 
