@@ -138,7 +138,7 @@ export default function DashboardPage() {
                 key={project.id}
                 className="group relative transition-colors hover:border-primary/50"
               >
-                <Link href={`/project/${project.id}`}>
+                <Link href="/workspace">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-base">
