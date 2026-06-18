@@ -243,7 +243,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const res = await fetch("/api/projects");
     if (!res.ok) return [];
     const data = await res.json();
-    return data.map((p: { id: string; name: string; description?: string; created_at: string; updated_at: string }) => ({
+    const items = data.items || data; // support paginated and flat response
+    return items.map((p: { id: string; name: string; description?: string; created_at: string; updated_at: string }) => ({
       id: p.id,
       name: p.name,
       description: p.description,

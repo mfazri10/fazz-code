@@ -1,59 +1,56 @@
-import { type ModelMessage,streamText } from "ai";
+import { type ModelMessage, streamText } from "ai";
 
 import { getSession } from "@/lib/auth-server";
 import { getModel } from "@/lib/model-gateway";
+import { chatSchema } from "@/lib/validations";
 
 export const maxDuration = 60;
 
-// Simple in-memory rate limiter
+// In-memory rate limiter
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 30; // requests per window
-const RATE_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 60_000;
 
 function checkRateLimit(userId: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
-
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS });
     return true;
   }
-
   if (entry.count >= RATE_LIMIT) return false;
   entry.count++;
   return true;
 }
 
 export async function POST(req: Request) {
-  // 1. Auth check
   const sessionData = await getSession();
   if (!sessionData?.session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2. Rate limit
   if (!checkRateLimit(sessionData.session.userId)) {
     return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
-  // 3. Parse & validate
-  let body: { messages?: unknown[]; model?: string };
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { messages, model = "claude-sonnet-4-20250514" } = body;
-
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return Response.json({ error: "Messages array required" }, { status: 400 });
+  const parsed = chatSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
-  // Limit message history to prevent token abuse
+  const { messages, model } = parsed.data;
   const recentMessages = messages.slice(-20) as ModelMessage[];
 
-  // 4. Stream
   const result = streamText({
     model: getModel(model),
     system: `You are Fazz Code, an expert AI code generator. You help users build web applications by generating clean, production-ready code.

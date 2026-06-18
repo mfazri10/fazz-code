@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { WebContainerErrorBoundary } from "@/components/webcontainer-error-boundary";
 import {
   getWebContainer,
   isWebContainerSupported,
@@ -182,6 +183,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   const deviceStyles = DEVICE_SIZES[deviceSize];
 
   return (
+    <WebContainerErrorBoundary>
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b px-3 py-1.5">
@@ -319,5 +321,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </div>
       )}
     </div>
+    </WebContainerErrorBoundary>
   );
 }

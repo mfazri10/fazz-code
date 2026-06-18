@@ -1,8 +1,9 @@
 import { getSession } from "@/lib/auth-server";
 import { createVersion, getProject, getVersions } from "@/lib/db";
+import { createVersionSchema } from "@/lib/validations";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -16,8 +17,12 @@ export async function GET(
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
-  const versions = await getVersions(id);
-  return Response.json(versions);
+  const { searchParams } = new URL(req.url);
+  const limit = Math.min(Number(searchParams.get("limit")) || 20, 50);
+  const cursor = searchParams.get("cursor") || undefined;
+
+  const result = await getVersions(id, limit, cursor);
+  return Response.json(result);
 }
 
 export async function POST(
@@ -35,13 +40,21 @@ export async function POST(
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
-  const body = await req.json();
-  const { files, description } = body;
-
-  if (!files || typeof files !== "object") {
-    return Response.json({ error: "files snapshot required" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const version = await createVersion(id, files, description);
+  const parsed = createVersionSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const version = await createVersion(id, parsed.data.files, parsed.data.description);
   return Response.json(version, { status: 201 });
 }

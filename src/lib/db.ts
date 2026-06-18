@@ -2,7 +2,14 @@ import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/fazzcode",
+  max: 20,                    // Maximum connections in pool
+  idleTimeoutMillis: 30000,   // Close idle connections after 30s
+  connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
 });
+
+// Graceful shutdown
+process.on("SIGINT", () => pool.end());
+process.on("SIGTERM", () => pool.end());
 
 export default pool;
 
@@ -18,12 +25,27 @@ export async function query(text: string, params?: unknown[]) {
 }
 
 // Project operations
-export async function getProjects(userId: string) {
-  const result = await query(
-    "SELECT * FROM projects WHERE user_id = $1 AND status = 'active' ORDER BY updated_at DESC",
-    [userId]
-  );
-  return result.rows;
+export async function getProjects(userId: string, limit = 20, cursor?: string) {
+  let sql = "SELECT * FROM projects WHERE user_id = $1 AND status = 'active'";
+  const params: unknown[] = [userId];
+
+  if (cursor) {
+    sql += " AND updated_at < $2";
+    params.push(cursor);
+  }
+
+  sql += " ORDER BY updated_at DESC LIMIT $" + (params.length + 1);
+  params.push(limit + 1);
+
+  const result = await query(sql, params);
+  const rows = result.rows;
+  const hasMore = rows.length > limit;
+  if (hasMore) rows.pop();
+
+  return {
+    items: rows,
+    nextCursor: hasMore ? rows[rows.length - 1]?.updated_at : null,
+  };
 }
 
 export async function getProject(id: string) {
@@ -138,10 +160,25 @@ export async function createVersion(projectId: string, filesSnapshot: unknown, d
   return result.rows[0];
 }
 
-export async function getVersions(projectId: string) {
-  const result = await query(
-    "SELECT * FROM versions WHERE project_id = $1 ORDER BY version_number DESC",
-    [projectId]
-  );
-  return result.rows;
+export async function getVersions(projectId: string, limit = 20, cursor?: string) {
+  let q = "SELECT id, version_number, description, created_at FROM versions WHERE project_id = $1";
+  const params: unknown[] = [projectId];
+
+  if (cursor) {
+    q += " AND version_number < $2";
+    params.push(cursor);
+  }
+
+  q += " ORDER BY version_number DESC LIMIT $" + (params.length + 1);
+  params.push(limit + 1);
+
+  const result = await query(q, params);
+  const rows = result.rows;
+  const hasMore = rows.length > limit;
+  if (hasMore) rows.pop();
+
+  return {
+    items: rows,
+    nextCursor: hasMore ? rows[rows.length - 1]?.version_number : null,
+  };
 }
