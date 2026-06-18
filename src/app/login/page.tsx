@@ -12,44 +12,64 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase";
+import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      if (isSignUp) {
+        const { error } = await authClient.signUp.email({
+          email,
+          password,
+          name: email.split("@")[0] || "User",
+        });
 
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage("Check your email for the login link!");
+        if (error) {
+          setMessage(error.message || "Sign up failed");
+        } else {
+          setMessage("Account created! Redirecting...");
+          window.location.href = "/";
+        }
+      } else {
+        const { error } = await authClient.signIn.email({
+          email,
+          password,
+        });
+
+        if (error) {
+          setMessage(error.message || "Sign in failed");
+        } else {
+          setMessage("Signed in! Redirecting...");
+          window.location.href = "/";
+        }
+      }
+    } catch {
+      setMessage("An error occurred");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleGithubLogin = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      setMessage(error.message);
+    try {
+      await authClient.signIn.social({
+        provider: "github",
+        callbackURL: "/",
+      });
+    } catch {
+      setMessage("GitHub login failed");
       setLoading(false);
     }
   };
@@ -63,7 +83,9 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl">Welcome to Fazz Code</CardTitle>
           <CardDescription>
-            Sign in to start building with AI
+            {isSignUp
+              ? "Create an account to start building"
+              : "Sign in to continue building"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -91,10 +113,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Email Login */}
-          <form onSubmit={handleEmailLogin} className="space-y-3">
+          {/* Email/Password Login */}
+          <form onSubmit={handleEmailAuth} className="space-y-3">
             <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
               <Input
+                id="email"
                 type="email"
                 placeholder="name@example.com"
                 value={email}
@@ -102,16 +126,46 @@ export default function LoginPage() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
               <Mail className="mr-2 h-4 w-4" />
-              {loading ? "Sending..." : "Send magic link"}
+              {loading
+                ? "Loading..."
+                : isSignUp
+                ? "Create account"
+                : "Sign in"}
             </Button>
           </form>
+
+          <div className="text-center">
+            <Button
+              variant="link"
+              className="text-sm text-muted-foreground"
+              onClick={() => setIsSignUp(!isSignUp)}
+            >
+              {isSignUp
+                ? "Already have an account? Sign in"
+                : "Don't have an account? Sign up"}
+            </Button>
+          </div>
 
           {message && (
             <p
               className={`text-center text-sm ${
-                message.includes("error") || message.includes("Error")
+                message.includes("error") ||
+                message.includes("failed") ||
+                message.includes("Error")
                   ? "text-destructive"
                   : "text-muted-foreground"
               }`}

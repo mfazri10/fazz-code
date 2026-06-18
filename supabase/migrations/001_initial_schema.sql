@@ -1,25 +1,72 @@
 -- Fazz Code Database Schema
--- Run this in Supabase SQL Editor
+-- Run this in PostgreSQL
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Better Auth tables (created automatically by better-auth, but here for reference)
+CREATE TABLE IF NOT EXISTS "user" (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
+  image TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS session (
+  id TEXT PRIMARY KEY,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "token" TEXT NOT NULL UNIQUE,
+  "ipAddress" TEXT,
+  "userAgent" TEXT,
+  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS account (
+  id TEXT PRIMARY KEY,
+  "accountId" TEXT NOT NULL,
+  "providerId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  "accessToken" TEXT,
+  "refreshToken" TEXT,
+  "idToken" TEXT,
+  "accessTokenExpiresAt" TIMESTAMPTZ,
+  "refreshTokenExpiresAt" TIMESTAMPTZ,
+  "scope" TEXT,
+  "password" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS verification (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Projects table
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   description TEXT,
-  user_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_projects_user_id ON projects(user_id);
-CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 
 -- Files table
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   path TEXT NOT NULL,
@@ -30,10 +77,10 @@ CREATE TABLE files (
   UNIQUE(project_id, path)
 );
 
-CREATE INDEX idx_files_project_id ON files(project_id);
+CREATE INDEX IF NOT EXISTS idx_files_project_id ON files(project_id);
 
 -- Messages table
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
@@ -45,11 +92,11 @@ CREATE TABLE messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_project_id ON messages(project_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_project_id ON messages(project_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 
 -- Agent runs table
-CREATE TABLE agent_runs (
+CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   agent_type TEXT NOT NULL CHECK (agent_type IN ('planner', 'generator', 'fixer', 'reviewer')),
@@ -62,11 +109,11 @@ CREATE TABLE agent_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_agent_runs_project_id ON agent_runs(project_id);
-CREATE INDEX idx_agent_runs_agent_type ON agent_runs(agent_type);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_project_id ON agent_runs(project_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_type ON agent_runs(agent_type);
 
 -- Versions table
-CREATE TABLE versions (
+CREATE TABLE IF NOT EXISTS versions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   version_number INTEGER NOT NULL,
@@ -76,7 +123,7 @@ CREATE TABLE versions (
   UNIQUE(project_id, version_number)
 );
 
-CREATE INDEX idx_versions_project_id ON versions(project_id);
+CREATE INDEX IF NOT EXISTS idx_versions_project_id ON versions(project_id);
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -88,74 +135,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to tables with updated_at
-CREATE TRIGGER update_projects_updated_at
-  BEFORE UPDATE ON projects
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_files_updated_at
-  BEFORE UPDATE ON files
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Row Level Security (RLS)
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE versions ENABLE ROW LEVEL SECURITY;
-
--- Policies (basic - adjust based on your auth setup)
-CREATE POLICY "Users can view own projects" ON projects
-  FOR SELECT USING (user_id = auth.uid()::text);
-
-CREATE POLICY "Users can insert own projects" ON projects
-  FOR INSERT WITH CHECK (user_id = auth.uid()::text);
-
-CREATE POLICY "Users can update own projects" ON projects
-  FOR UPDATE USING (user_id = auth.uid()::text);
-
-CREATE POLICY "Users can delete own projects" ON projects
-  FOR DELETE USING (user_id = auth.uid()::text);
-
--- Files policies (through project ownership)
-CREATE POLICY "Users can view project files" ON files
-  FOR SELECT USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
-CREATE POLICY "Users can manage project files" ON files
-  FOR ALL USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
--- Messages policies
-CREATE POLICY "Users can view project messages" ON messages
-  FOR SELECT USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
-CREATE POLICY "Users can manage project messages" ON messages
-  FOR ALL USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
--- Agent runs policies
-CREATE POLICY "Users can view project agent runs" ON agent_runs
-  FOR SELECT USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
-CREATE POLICY "Users can manage project agent runs" ON agent_runs
-  FOR ALL USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
--- Versions policies
-CREATE POLICY "Users can view project versions" ON versions
-  FOR SELECT USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
-
-CREATE POLICY "Users can manage project versions" ON versions
-  FOR ALL USING (
-    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()::text)
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_projects_updated_at') THEN
+    CREATE TRIGGER update_projects_updated_at
+      BEFORE UPDATE ON projects
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_files_updated_at') THEN
+    CREATE TRIGGER update_files_updated_at
+      BEFORE UPDATE ON files
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END
+$$;

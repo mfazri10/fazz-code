@@ -1,251 +1,147 @@
-import type { Database } from "@/lib/database.types";
-import { supabase } from "@/lib/supabase";
+import { Pool } from "pg";
 
-type Project = Database["public"]["Tables"]["projects"]["Row"];
-type File = Database["public"]["Tables"]["files"]["Row"];
-type Message = Database["public"]["Tables"]["messages"]["Row"];
-type AgentRun = Database["public"]["Tables"]["agent_runs"]["Row"];
-type Version = Database["public"]["Tables"]["versions"]["Row"];
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/fazzcode",
+});
 
-// Projects
-export async function getProjects(userId: string): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("updated_at", { ascending: false });
+export default pool;
 
-  if (error) throw error;
-  return data ?? [];
+// Helper functions for database operations
+export async function query(text: string, params?: unknown[]) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(text, params);
+    return result;
+  } finally {
+    client.release();
+  }
 }
 
-export async function getProject(id: string): Promise<Project | null> {
-  const { data, error } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function createProject(
-  name: string,
-  userId: string,
-  description?: string
-): Promise<Project> {
-  const { data, error } = await supabase
-    .from("projects")
-    .insert({ name, user_id: userId, description })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateProject(
-  id: string,
-  updates: Database["public"]["Tables"]["projects"]["Update"]
-): Promise<Project> {
-  const { data, error } = await supabase
-    .from("projects")
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteProject(id: string): Promise<void> {
-  const { error } = await supabase
-    .from("projects")
-    .update({ status: "deleted" })
-    .eq("id", id);
-
-  if (error) throw error;
-}
-
-// Files
-export async function getProjectFiles(projectId: string): Promise<File[]> {
-  const { data, error } = await supabase
-    .from("files")
-    .select("*")
-    .eq("project_id", projectId)
-    .order("path");
-
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function upsertFile(
-  projectId: string,
-  path: string,
-  content: string,
-  language: string = "plaintext"
-): Promise<File> {
-  const { data, error } = await supabase
-    .from("files")
-    .upsert(
-      { project_id: projectId, path, content, language },
-      { onConflict: "project_id,path" }
-    )
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteFile(projectId: string, path: string): Promise<void> {
-  const { error } = await supabase
-    .from("files")
-    .delete()
-    .eq("project_id", projectId)
-    .eq("path", path);
-
-  if (error) throw error;
-}
-
-export async function upsertFiles(
-  projectId: string,
-  files: Array<{ path: string; content: string; language?: string }>
-): Promise<void> {
-  const { error } = await supabase.from("files").upsert(
-    files.map((f) => ({
-      project_id: projectId,
-      path: f.path,
-      content: f.content,
-      language: f.language ?? "plaintext",
-    })),
-    { onConflict: "project_id,path" }
+// Project operations
+export async function getProjects(userId: string) {
+  const result = await query(
+    "SELECT * FROM projects WHERE user_id = $1 AND status = 'active' ORDER BY updated_at DESC",
+    [userId]
   );
-
-  if (error) throw error;
+  return result.rows;
 }
 
-// Messages
-export async function getProjectMessages(projectId: string): Promise<Message[]> {
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("project_id", projectId)
-    .order("created_at");
+export async function getProject(id: string) {
+  const result = await query("SELECT * FROM projects WHERE id = $1", [id]);
+  return result.rows[0] || null;
+}
 
-  if (error) throw error;
-  return data ?? [];
+export async function createProject(name: string, userId: string, description?: string) {
+  const result = await query(
+    "INSERT INTO projects (name, user_id, description) VALUES ($1, $2, $3) RETURNING *",
+    [name, userId, description]
+  );
+  return result.rows[0];
+}
+
+export async function updateProject(id: string, updates: { name?: string; description?: string; status?: string }) {
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  let paramIndex = 1;
+
+  if (updates.name) {
+    setClauses.push(`name = $${paramIndex++}`);
+    values.push(updates.name);
+  }
+  if (updates.description !== undefined) {
+    setClauses.push(`description = $${paramIndex++}`);
+    values.push(updates.description);
+  }
+  if (updates.status) {
+    setClauses.push(`status = $${paramIndex++}`);
+    values.push(updates.status);
+  }
+
+  setClauses.push(`updated_at = NOW()`);
+  values.push(id);
+
+  const result = await query(
+    `UPDATE projects SET ${setClauses.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values
+  );
+  return result.rows[0];
+}
+
+export async function deleteProject(id: string) {
+  await query("UPDATE projects SET status = 'deleted' WHERE id = $1", [id]);
+}
+
+// File operations
+export async function getProjectFiles(projectId: string) {
+  const result = await query(
+    "SELECT * FROM files WHERE project_id = $1 ORDER BY path",
+    [projectId]
+  );
+  return result.rows;
+}
+
+export async function upsertFile(projectId: string, path: string, content: string, language: string = "plaintext") {
+  const result = await query(
+    `INSERT INTO files (project_id, path, content, language) 
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (project_id, path) 
+     DO UPDATE SET content = $3, language = $4, updated_at = NOW()
+     RETURNING *`,
+    [projectId, path, content, language]
+  );
+  return result.rows[0];
+}
+
+export async function deleteFile(projectId: string, path: string) {
+  await query("DELETE FROM files WHERE project_id = $1 AND path = $2", [projectId, path]);
+}
+
+// Message operations
+export async function getProjectMessages(projectId: string) {
+  const result = await query(
+    "SELECT * FROM messages WHERE project_id = $1 ORDER BY created_at",
+    [projectId]
+  );
+  return result.rows;
 }
 
 export async function createMessage(
   projectId: string,
-  role: Message["role"],
+  role: "user" | "assistant" | "system",
   content: string,
   meta?: { model?: string; tokens?: number; cost?: number }
-): Promise<Message> {
-  const { data, error } = await supabase
-    .from("messages")
-    .insert({
-      project_id: projectId,
-      role,
-      content,
-      model: meta?.model,
-      tokens: meta?.tokens,
-      cost: meta?.cost,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+) {
+  const result = await query(
+    `INSERT INTO messages (project_id, role, content, model, tokens, cost)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [projectId, role, content, meta?.model, meta?.tokens, meta?.cost]
+  );
+  return result.rows[0];
 }
 
-export async function updateMessage(
-  id: string,
-  updates: Database["public"]["Tables"]["messages"]["Update"]
-): Promise<Message> {
-  const { data, error } = await supabase
-    .from("messages")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
+// Version operations
+export async function createVersion(projectId: string, filesSnapshot: unknown, description?: string) {
+  // Get current max version
+  const maxResult = await query(
+    "SELECT MAX(version_number) as max_version FROM versions WHERE project_id = $1",
+    [projectId]
+  );
+  const nextVersion = (maxResult.rows[0]?.max_version || 0) + 1;
 
-  if (error) throw error;
-  return data;
+  const result = await query(
+    `INSERT INTO versions (project_id, version_number, description, files_snapshot)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [projectId, nextVersion, description, JSON.stringify(filesSnapshot)]
+  );
+  return result.rows[0];
 }
 
-// Agent Runs
-export async function createAgentRun(
-  run: Database["public"]["Tables"]["agent_runs"]["Insert"]
-): Promise<AgentRun> {
-  const { data, error } = await supabase
-    .from("agent_runs")
-    .insert(run)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateAgentRun(
-  id: string,
-  updates: Database["public"]["Tables"]["agent_runs"]["Update"]
-): Promise<AgentRun> {
-  const { data, error } = await supabase
-    .from("agent_runs")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-// Versions
-export async function createVersion(
-  projectId: string,
-  filesSnapshot: Database["public"]["Tables"]["versions"]["Row"]["files_snapshot"],
-  description?: string
-): Promise<Version> {
-  // Get current max version number
-  const { data: maxVersion } = await supabase
-    .from("versions")
-    .select("version_number")
-    .eq("project_id", projectId)
-    .order("version_number", { ascending: false })
-    .limit(1)
-    .single();
-
-  const nextVersion = (maxVersion?.version_number ?? 0) + 1;
-
-  const { data, error } = await supabase
-    .from("versions")
-    .insert({
-      project_id: projectId,
-      version_number: nextVersion,
-      description,
-      files_snapshot: filesSnapshot,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getVersions(projectId: string): Promise<Version[]> {
-  const { data, error } = await supabase
-    .from("versions")
-    .select("*")
-    .eq("project_id", projectId)
-    .order("version_number", { ascending: false });
-
-  if (error) throw error;
-  return data ?? [];
+export async function getVersions(projectId: string) {
+  const result = await query(
+    "SELECT * FROM versions WHERE project_id = $1 ORDER BY version_number DESC",
+    [projectId]
+  );
+  return result.rows;
 }
