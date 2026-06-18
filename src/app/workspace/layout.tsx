@@ -1,7 +1,9 @@
 "use client";
 
-import { useDefaultLayout } from "react-resizable-panels";
 import { ChatPanel } from "@/components/chat-panel";
+import { EditorPanel } from "@/components/editor-panel";
+import { FileTree } from "@/components/file-tree";
+import { PreviewPanel } from "@/components/preview-panel";
 import {
   ChevronDownIcon,
   FolderPlusIcon,
@@ -20,20 +22,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useProjectStore } from "@/stores/project-store";
 
 const MODELS = [
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
+  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+  { id: "gpt-4o", label: "GPT-4o" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
 ];
 
 export default function WorkspaceLayout({
@@ -41,11 +39,9 @@ export default function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: "fazz-workspace-panels",
-    storage: typeof window !== "undefined" ? window.localStorage : undefined,
-    panelIds: ["chat", "editor", "preview"],
-  });
+  const { selectedModel, setSelectedModel } = useProjectStore();
+
+  const currentModel = MODELS.find((m) => m.id === selectedModel) ?? MODELS[0]!;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -58,13 +54,18 @@ export default function WorkspaceLayout({
 
           {/* Model Selector */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted">
-              {MODELS[0]?.label}
-              <ChevronDownIcon className="size-3 opacity-60" />
+            <DropdownMenuTrigger>
+              <Button variant="outline" size="sm" className="gap-1.5 h-7">
+                <span className="text-xs">{currentModel.label}</span>
+                <ChevronDownIcon className="h-3 w-3 opacity-60" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {MODELS.map((model) => (
-                <DropdownMenuItem key={model.id}>
+                <DropdownMenuItem
+                  key={model.id}
+                  onClick={() => setSelectedModel(model.id)}
+                >
                   {model.label}
                 </DropdownMenuItem>
               ))}
@@ -74,45 +75,22 @@ export default function WorkspaceLayout({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <FolderPlusIcon />
-            </TooltipTrigger>
-            <TooltipContent>New Project</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <DownloadIcon />
-            </TooltipTrigger>
-            <TooltipContent>Export</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <SettingsIcon />
-            </TooltipTrigger>
-            <TooltipContent>Settings</TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <FolderPlusIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <DownloadIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <SettingsIcon className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
       {/* Three-pane resizable layout */}
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="flex-1"
-        defaultLayout={defaultLayout}
-        onLayoutChanged={onLayoutChanged}
-      >
+      <ResizablePanelGroup className="flex-1" {...({ direction: "horizontal" } as Record<string, unknown>)}>
         {/* Left: Chat Panel */}
         <ResizablePanel
-          id="chat"
           defaultSize={25}
           minSize={15}
           collapsible
@@ -120,7 +98,7 @@ export default function WorkspaceLayout({
         >
           <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b px-3 py-2">
-              <MessageSquareIcon className="size-4 text-muted-foreground" />
+              <MessageSquareIcon className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground">
                 Chat
               </span>
@@ -133,17 +111,25 @@ export default function WorkspaceLayout({
 
         <ResizableHandle withHandle />
 
-        {/* Center: Code Editor Panel */}
-        <ResizablePanel id="editor" defaultSize={50} minSize={20}>
-          <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2 border-b px-3 py-2">
-              <CodeIcon className="size-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">
-                Editor
-              </span>
+        {/* Center: File Tree + Code Editor */}
+        <ResizablePanel defaultSize={50} minSize={20}>
+          <div className="flex h-full">
+            {/* File Tree Sidebar */}
+            <div className="w-48 border-r overflow-hidden">
+              <FileTree />
             </div>
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-              Editor
+
+            {/* Editor */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex items-center gap-2 border-b px-3 py-2">
+                <CodeIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Editor
+                </span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <EditorPanel />
+              </div>
             </div>
           </div>
         </ResizablePanel>
@@ -152,7 +138,6 @@ export default function WorkspaceLayout({
 
         {/* Right: Preview Panel */}
         <ResizablePanel
-          id="preview"
           defaultSize={25}
           minSize={15}
           collapsible
@@ -160,13 +145,13 @@ export default function WorkspaceLayout({
         >
           <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b px-3 py-2">
-              <EyeIcon className="size-4 text-muted-foreground" />
+              <EyeIcon className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground">
                 Preview
               </span>
             </div>
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-              Preview
+            <div className="flex-1 overflow-hidden">
+              <PreviewPanel />
             </div>
           </div>
         </ResizablePanel>
