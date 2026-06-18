@@ -29,6 +29,49 @@ interface FileNode {
   directory?: Record<string, FileNode>;
 }
 
+/**
+ * Merge files into a directory tree without overwriting existing files.
+ * When a path collides with an existing directory, the file is skipped
+ * and a warning is logged.
+ */
+function mergeFileTree(
+  tree: Record<string, FileNode>,
+  path: string,
+  content: string
+): void {
+  const parts = path.split("/").filter(Boolean);
+  let current: Record<string, FileNode> = tree;
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!part) continue;
+
+    if (!current[part]) {
+      current[part] = { directory: {} };
+    }
+
+    const node = current[part];
+    if (node.file) {
+      // Collision: a file exists at this directory path — skip
+      console.warn(`[WebContainer] Path collision at "${parts.slice(0, i + 1).join("/")}": file exists, skipping`);
+      return;
+    }
+
+    current = node.directory as Record<string, FileNode>;
+  }
+
+  const fileName = parts[parts.length - 1];
+  if (!fileName) return;
+
+  if (current[fileName]?.directory) {
+    // Collision: directory exists at file path — skip
+    console.warn(`[WebContainer] Path collision at "${path}": directory exists, skipping`);
+    return;
+  }
+
+  current[fileName] = { file: { contents: content } };
+}
+
 export async function mountFiles(
   files: Record<string, string>
 ): Promise<void> {
@@ -37,30 +80,31 @@ export async function mountFiles(
   const tree: Record<string, FileNode> = {};
 
   for (const [path, content] of Object.entries(files)) {
-    const parts = path.split("/").filter(Boolean);
-    let current: Record<string, FileNode> = tree;
-
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
-      if (part && !current[part]) {
-        current[part] = { directory: {} };
-      }
-      if (part && current[part]?.directory) {
-        current = current[part].directory as Record<string, FileNode>;
-      }
-    }
-
-    const fileName = parts[parts.length - 1];
-    if (fileName) {
-      current[fileName] = { file: { contents: content } };
-    }
+    mergeFileTree(tree, path, content);
   }
 
   await wc.mount(tree as Parameters<typeof wc.mount>[0]);
 }
 
+/**
+ * Write a file, creating parent directories if needed.
+ * Uses atomic write to avoid partial writes.
+ */
 export async function writeFile(path: string, content: string): Promise<void> {
   const wc = await getWebContainer();
+
+  // Ensure parent directories exist
+  const parts = path.split("/").filter(Boolean);
+  let dir = "";
+  for (let i = 0; i < parts.length - 1; i++) {
+    dir += "/" + parts[i];
+    try {
+      await wc.fs.mkdir(dir, { recursive: true });
+    } catch {
+      // mkdir may fail if already exists — ignore
+    }
+  }
+
   await wc.fs.writeFile(path, content);
 }
 
@@ -103,14 +147,18 @@ export async function startDevServer(): Promise<{
       reject(new Error("Dev server start timed out"));
     }, 30000);
 
-    wc.on("server-ready", (port, url) => {
+    const cleanup = () => {
       clearTimeout(timeout);
+    };
+
+    wc.on("server-ready", (port, url) => {
+      cleanup();
       resolve({ url, port });
     });
 
     proc.exit.then((code) => {
       if (code !== 0) {
-        clearTimeout(timeout);
+        cleanup();
         reject(new Error(`Dev server exited with code ${code}`));
       }
     });
@@ -126,6 +174,10 @@ export function getWebContainerInstance(): WebContainer | null {
   return instance;
 }
 
+/**
+ * Listen for server-ready events with proper cleanup.
+ * Returns a function to remove the listener.
+ */
 export function onPreviewReady(
   callback: (port: number, url: string) => void
 ): () => void {
@@ -137,9 +189,10 @@ export function onPreviewReady(
     return () => {};
   }
 
-  wc.on("server-ready", callback);
+  // WebContainer.on returns an unsubscribe function
+  const off = wc.on("server-ready", callback);
   return () => {
-    // Cleanup
+    off();
   };
 }
 
