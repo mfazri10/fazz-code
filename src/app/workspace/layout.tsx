@@ -8,6 +8,7 @@ import {
   FolderPlusIcon,
   MessageSquareIcon,
   SettingsIcon,
+  SparklesIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -41,6 +42,23 @@ const MODELS = [
   { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
 ];
 
+function PanelLabel({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {children}
+      </span>
+    </div>
+  );
+}
+
 export default function WorkspaceLayout({
   children,
 }: {
@@ -52,13 +70,20 @@ export default function WorkspaceLayout({
   const currentModel = MODELS.find((m) => m.id === selectedModel) ?? MODELS[0]!;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* Top Navigation Bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold tracking-tight">
-            Fazz Code
-          </span>
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-3 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <CodeIcon className="h-3.5 w-3.5" />
+            </div>
+            <span className="text-sm font-semibold tracking-tight">
+              Fazz Code
+            </span>
+          </div>
+
+          <div className="mx-1 h-5 w-px bg-border" />
 
           {/* Command Palette */}
           <CommandPalette />
@@ -66,7 +91,8 @@ export default function WorkspaceLayout({
           {/* Model Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger>
-              <Button variant="outline" size="sm" className="gap-1.5 h-7">
+              <Button variant="outline" size="sm" className="h-7 gap-1.5">
+                <SparklesIcon className="h-3 w-3 text-primary" />
                 <span className="text-xs">{currentModel.label}</span>
                 <ChevronDownIcon className="h-3 w-3 opacity-60" />
               </Button>
@@ -86,16 +112,18 @@ export default function WorkspaceLayout({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <FolderPlusIcon className="h-4 w-4" />
-          </Button>
-          <VersionHistory />
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <DownloadIcon className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <SettingsIcon className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-0.5">
+            <Button variant="ghost" size="icon" className="h-6 w-6" title="New file">
+              <FolderPlusIcon className="h-4 w-4" />
+            </Button>
+            <VersionHistory />
+            <Button variant="ghost" size="icon" className="h-6 w-6" title="Download">
+              <DownloadIcon className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6" title="Settings">
+              <SettingsIcon className="h-4 w-4" />
+            </Button>
+          </div>
           <UserMenu />
         </div>
       </header>
@@ -104,12 +132,14 @@ export default function WorkspaceLayout({
       <AgentStatusPanel />
 
       {/* Mobile Tab Switcher */}
-      <div className="flex md:hidden border-b">
-        {([
-          { id: "chat" as const, label: "Chat", icon: MessageSquareIcon },
-          { id: "editor" as const, label: "Editor", icon: CodeIcon },
-          { id: "preview" as const, label: "Preview", icon: EyeIcon },
-        ]).map((tab) => (
+      <div className="flex border-b md:hidden">
+        {(
+          [
+            { id: "chat" as const, label: "Chat", icon: MessageSquareIcon },
+            { id: "editor" as const, label: "Editor", icon: CodeIcon },
+            { id: "preview" as const, label: "Preview", icon: EyeIcon },
+          ]
+        ).map((tab) => (
           <button
             key={tab.id}
             className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
@@ -126,21 +156,16 @@ export default function WorkspaceLayout({
       </div>
 
       {/* Three-pane resizable layout (desktop) */}
-      <ResizablePanelGroup className="flex-1 hidden md:flex" {...({ direction: "horizontal" } as Record<string, unknown>)}>
+      <ResizablePanelGroup
+        className="hidden flex-1 md:flex"
+        {...({ direction: "horizontal" } as Record<string, unknown>)}
+      >
         {/* Left: Chat Panel */}
-        <ResizablePanel
-          defaultSize={25}
-          minSize={15}
-          collapsible
-          collapsedSize={4}
-        >
+        <ResizablePanel defaultSize={25} minSize={15} collapsible collapsedSize={4}>
           <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2 border-b px-3 py-2">
-              <MessageSquareIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">
-                Chat
-              </span>
-            </div>
+            <PanelLabel icon={<MessageSquareIcon className="h-4 w-4" />}>
+              Chat
+            </PanelLabel>
             <div className="flex-1 overflow-hidden">
               <ChatPanel />
             </div>
@@ -153,18 +178,13 @@ export default function WorkspaceLayout({
         <ResizablePanel defaultSize={50} minSize={20}>
           <div className="flex h-full">
             {/* File Tree Sidebar */}
-            <div className="w-48 border-r overflow-hidden">
+            <div className="w-48 overflow-hidden border-r">
               <FileTree />
             </div>
 
             {/* Editor */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center gap-2 border-b px-3 py-2">
-                <CodeIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  Editor
-                </span>
-              </div>
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <PanelLabel icon={<CodeIcon className="h-4 w-4" />}>Editor</PanelLabel>
               <div className="flex-1 overflow-hidden">
                 <EditorPanel />
               </div>
@@ -175,19 +195,9 @@ export default function WorkspaceLayout({
         <ResizableHandle withHandle />
 
         {/* Right: Preview Panel */}
-        <ResizablePanel
-          defaultSize={25}
-          minSize={15}
-          collapsible
-          collapsedSize={4}
-        >
+        <ResizablePanel defaultSize={25} minSize={15} collapsible collapsedSize={4}>
           <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2 border-b px-3 py-2">
-              <EyeIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">
-                Preview
-              </span>
-            </div>
+            <PanelLabel icon={<EyeIcon className="h-4 w-4" />}>Preview</PanelLabel>
             <div className="flex-1 overflow-hidden">
               <PreviewPanel />
             </div>
@@ -196,7 +206,7 @@ export default function WorkspaceLayout({
       </ResizablePanelGroup>
 
       {/* Mobile Panels */}
-      <div className="flex-1 flex md:hidden overflow-hidden">
+      <div className="flex flex-1 overflow-hidden md:hidden">
         {mobileTab === "chat" && <ChatPanel />}
         {mobileTab === "editor" && <EditorPanel />}
         {mobileTab === "preview" && <PreviewPanel />}

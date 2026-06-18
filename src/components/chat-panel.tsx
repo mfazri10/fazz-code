@@ -10,7 +10,7 @@ import {
   User,
   Wrench,
 } from "lucide-react";
-import { useCallback,useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -29,12 +29,8 @@ export function ChatPanel() {
   const [streamingContent, setStreamingContent] = useState("");
   const [currentStage, setCurrentStage] = useState("");
 
-  const {
-    messages,
-    addMessage,
-    isGenerating,
-    selectedModel,
-  } = useProjectStore();
+  const { messages, addMessage, isGenerating, selectedModel } =
+    useProjectStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -44,6 +40,18 @@ export function ChatPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, streamingContent]);
+
+  // Prefill from landing-page hero: /workspace?prompt=...
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const incoming = params.get("prompt");
+    if (incoming) {
+      setInput(incoming);
+      // Clean the URL so the prompt is not re-applied on refresh
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const handleCopy = useCallback(async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
@@ -180,11 +188,15 @@ export function ChatPanel() {
         <div className="space-y-4">
           {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Sparkles className="h-8 w-8 mb-3 opacity-50" />
-              <p className="text-sm font-medium">Start building</p>
-              <p className="text-xs mt-1 text-center max-w-[200px]">
-                Describe what you want to create and I will generate the code
-                for you.
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                Mulai membangun
+              </p>
+              <p className="mt-1 max-w-[220px] text-center text-xs">
+                Deskripsikan apa yang ingin kamu buat dan saya akan membuatkan
+                kodenya untukmu.
               </p>
             </div>
           )}
@@ -223,21 +235,21 @@ export function ChatPanel() {
                       remarkPlugins={[remarkGfm]}
                       components={{
                         code({ className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || "");
-                          const codeStr = String(children).replace(/\n$/, "");
+                          const match = /language-(\\w+)/.exec(className || "");
+                          const codeStr = String(children).replace(/\\n$/, "");
                           const codeId = `${message.id}-${codeStr.slice(0, 20)}`;
 
                           if (match) {
                             return (
                               <div className="relative group">
-                                <div className="flex items-center justify-between bg-[#282c34] px-4 py-1.5 rounded-t-md">
+                                <div className="flex items-center justify-between rounded-t-md bg-[#282c34] px-4 py-1.5">
                                   <span className="text-xs text-gray-400">
                                     {match[1]}
                                   </span>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                                     onClick={() => handleCopy(codeStr, codeId)}
                                   >
                                     {copiedId === codeId ? (
@@ -274,25 +286,26 @@ export function ChatPanel() {
                 )}
 
                 {/* Token tracking */}
-                {message.role === "assistant" && (message.tokens || message.cost) && (
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                    {message.tokens && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
-                        {message.tokens.toLocaleString()} tokens
-                      </span>
-                    )}
-                    {message.cost !== undefined && message.cost > 0 && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-yellow-500/10 px-1.5 py-0.5 text-yellow-600">
-                        ${message.cost.toFixed(4)}
-                      </span>
-                    )}
-                    {message.model && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
-                        {message.model.split("/").pop()}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {message.role === "assistant" &&
+                  (message.tokens || message.cost) && (
+                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {message.tokens && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
+                          {message.tokens.toLocaleString()} tokens
+                        </span>
+                      )}
+                      {message.cost !== undefined && message.cost > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-yellow-500/10 px-1.5 py-0.5 text-yellow-600">
+                          ${message.cost.toFixed(4)}
+                        </span>
+                      )}
+                      {message.model && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-muted-foreground/10 px-1.5 py-0.5">
+                          {message.model.split("/").pop()}
+                        </span>
+                      )}
+                    </div>
+                  )}
               </div>
 
               {message.role === "user" && (
@@ -331,8 +344,8 @@ export function ChatPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Describe what you want to build..."
-            className="min-h-[60px] max-h-[200px] resize-none"
+            placeholder="Deskripsikan apa yang ingin kamu bangun..."
+            className="max-h-[200px] min-h-[60px] resize-none"
             rows={2}
           />
           <div className="flex flex-col gap-1">
@@ -353,11 +366,9 @@ export function ChatPanel() {
           </div>
         </form>
         <p className="mt-1.5 text-[10px] text-muted-foreground">
-          Press{" "}
-          <kbd className="rounded border px-1 py-0.5 text-[9px]">
-            ⌘ Enter
-          </kbd>{" "}
-          to send
+          Tekan{" "}
+          <kbd className="rounded border px-1 py-0.5 text-[9px]">⌘ Enter</kbd>{" "}
+          untuk mengirim
         </p>
       </div>
     </div>
