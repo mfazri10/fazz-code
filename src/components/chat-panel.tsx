@@ -37,6 +37,7 @@ export function ChatPanel() {
   } = useProjectStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -72,6 +73,9 @@ export function ChatPanel() {
       setStreamingContent("");
       setCurrentStage("starting");
 
+      const abortController = new AbortController();
+      abortRef.current = abortController;
+
       try {
         await runNetwork({
           prompt: userPrompt,
@@ -85,6 +89,7 @@ export function ChatPanel() {
             setCurrentStage("");
           },
           onError: (error) => {
+            if (abortController.signal.aborted) return;
             addMessage({
               id: crypto.randomUUID(),
               role: "system",
@@ -95,6 +100,7 @@ export function ChatPanel() {
           },
         });
       } finally {
+        abortRef.current = null;
         setIsStreaming(false);
         setStreamingContent("");
         setCurrentStage("");
@@ -114,7 +120,8 @@ export function ChatPanel() {
   );
 
   const handleStop = useCallback(() => {
-    // TODO: Implement stop generation
+    abortRef.current?.abort();
+    abortRef.current = null;
     setIsStreaming(false);
     setStreamingContent("");
     setCurrentStage("");

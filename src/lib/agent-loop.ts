@@ -33,6 +33,66 @@ export interface AgentRunOptions {
   onProgress?: (message: string) => void;
   onComplete?: (summary: string) => void;
   onError?: (error: Error) => void;
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * Parse code blocks from AI response text.
+ * Handles multiple formats and validates content.
+ */
+function parseCodeBlocks(text: string): Array<{ path: string; content: string; language: string }> {
+  const results: Array<{ path: string; content: string; language: string }> = [];
+  const seen = new Set<string>();
+
+  const langMap: Record<string, string> = {
+    tsx: "typescript",
+    ts: "typescript",
+    jsx: "javascript",
+    js: "javascript",
+    css: "css",
+    html: "html",
+    json: "json",
+    md: "markdown",
+    sql: "sql",
+    sh: "shell",
+    bash: "shell",
+  };
+
+  // Pattern 1: ```lang filename="path"
+  const regex1 = /```(\w+)\s+filename="([^"]+)"\n([\s\S]*?)```/g;
+  // Pattern 2: ```filename="path"``` (no lang)
+  const regex2 = /```filename="([^"]+)"\n([\s\S]*?)```/g;
+
+  let match;
+
+  // Try pattern 1 first
+  while ((match = regex1.exec(text)) !== null) {
+    const [, lang, filePath, content] = match;
+    if (filePath && content?.trim()) {
+      const ext = filePath.split(".").pop() || lang || "";
+      if (!seen.has(filePath)) {
+        seen.add(filePath);
+        results.push({ path: filePath, content: content.trim(), language: langMap[ext] || "plaintext" });
+      }
+    }
+  }
+
+  // Try pattern 2 if pattern 1 found nothing
+  if (results.length === 0) {
+    while ((match = regex2.exec(text)) !== null) {
+      const [, filePath, content] = match;
+      if (filePath && content?.trim()) {
+        const ext = filePath.split(".").pop() || "";
+        if (!seen.has(filePath)) {
+          seen.add(filePath);
+          results.push({ path: filePath, content: content.trim(), language: langMap[ext] || "plaintext" });
+        }
+      }
+    }
+  }
+
+  // Pattern 3: generic code blocks — skip, too ambiguous
+  return results;
 }
 
 export async function runGenerator({
@@ -41,6 +101,7 @@ export async function runGenerator({
   onProgress,
   onComplete,
   onError,
+  abortSignal,
 }: AgentRunOptions): Promise<void> {
   const store = useProjectStore.getState();
 
@@ -54,41 +115,22 @@ export async function runGenerator({
       model: getModel(model),
       system: GENERATOR_SYSTEM_PROMPT,
       prompt,
+      abortSignal,
     });
 
     // Parse code blocks from the response
-    const codeBlockRegex = /```(\w+)\s+filename="([^"]+)"\n([\s\S]*?)```/g;
-    let match;
+    const parsed = parseCodeBlocks(result.text);
     let filesCreated = 0;
 
-    while ((match = codeBlockRegex.exec(result.text)) !== null) {
-      const [, , filePath, content] = match;
-      if (filePath && content) {
-        const ext = filePath.split(".").pop() || "";
-        const langMap: Record<string, string> = {
-          tsx: "typescript",
-          ts: "typescript",
-          jsx: "javascript",
-          js: "javascript",
-          css: "css",
-          html: "html",
-          json: "json",
-          md: "markdown",
-        };
-
-        const existing = store.files.find((f) => f.path === filePath);
-        if (existing) {
-          store.updateFile(filePath, content.trim());
-        } else {
-          store.addFile({
-            path: filePath,
-            content: content.trim(),
-            language: langMap[ext] || "plaintext",
-          });
-        }
-        filesCreated++;
-        onProgress?.(`Created: ${filePath}`);
+    for (const { path: filePath, content, language } of parsed) {
+      const existing = store.files.find((f) => f.path === filePath);
+      if (existing) {
+        store.updateFile(filePath, content);
+      } else {
+        store.addFile({ path: filePath, content, language });
       }
+      filesCreated++;
+      onProgress?.(`Created: ${filePath}`);
     }
 
     // Add assistant message to chat
@@ -102,6 +144,13 @@ export async function runGenerator({
 
     onComplete?.(`Generated ${filesCreated} files`);
   } catch (error) {
+    if (abortSignal?.aborted) {
+      onProgress?.("Generation cancelled");
+      store.setRunStatus("idle");
+      store.setIsGenerating(false);
+      return;
+    }
+
     const err = error instanceof Error ? error : new Error(String(error));
     onError?.(err);
 
