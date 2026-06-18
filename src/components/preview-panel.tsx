@@ -1,17 +1,18 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
-  RefreshCw,
-  ExternalLink,
-  Monitor,
-  Tablet,
-  Smartphone,
-  Loader2,
   AlertCircle,
+  ExternalLink,
+  Loader2,
+  Monitor,
+  RefreshCw,
   RotateCcw,
+  Smartphone,
+  Tablet,
 } from "lucide-react";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useCallback, useEffect,useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/stores/project-store";
 
 type DeviceSize = "desktop" | "tablet" | "mobile";
@@ -29,7 +30,7 @@ export function PreviewPanel() {
   const [deviceSize, setDeviceSize] = useState<DeviceSize>("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const { files, errors: buildErrors } = useProjectStore();
+  const { errors: buildErrors } = useProjectStore();
 
   const refreshPreview = useCallback(() => {
     if (iframeRef.current) {

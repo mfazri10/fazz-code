@@ -1,5 +1,6 @@
 import { serve } from "inngest/next";
-import { inngest, generateApp, fixErrors } from "@/lib/inngest";
+
+import { fixErrors,generateApp, inngest } from "@/lib/inngest";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,

@@ -1,4 +1,5 @@
 import { streamText } from "ai";
+
 import { getModel } from "@/lib/model-gateway";
 
 export const maxDuration = 60;

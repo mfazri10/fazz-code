@@ -1,7 +1,7 @@
 import { generateText } from "ai";
+
 import { getModel } from "@/lib/model-gateway";
 import { useProjectStore } from "@/stores/project-store";
-import { z } from "zod";
 
 const GENERATOR_SYSTEM_PROMPT = `You are Fazz Code Generator, an expert AI code generator. You help users build web applications by generating clean, production-ready code.
 

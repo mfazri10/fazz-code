@@ -1,19 +1,19 @@
 "use client";
 
+import {
+  ChevronDownIcon,
+  CodeIcon,
+  DownloadIcon,
+  EyeIcon,
+  FolderPlusIcon,
+  MessageSquareIcon,
+  SettingsIcon,
+} from "lucide-react";
+
 import { ChatPanel } from "@/components/chat-panel";
 import { EditorPanel } from "@/components/editor-panel";
 import { FileTree } from "@/components/file-tree";
 import { PreviewPanel } from "@/components/preview-panel";
-import {
-  ChevronDownIcon,
-  FolderPlusIcon,
-  DownloadIcon,
-  SettingsIcon,
-  MessageSquareIcon,
-  CodeIcon,
-  EyeIcon,
-} from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

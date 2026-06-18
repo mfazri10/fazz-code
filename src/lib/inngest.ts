@@ -8,13 +8,10 @@ export const generateApp = inngest.createFunction(
   {
     id: "generate-app",
     name: "Generate App",
+    triggers: [{ event: "generation/requested" }],
   },
-  { event: "generation/requested" },
-  // @ts-expect-error Inngest v4 createFunction handler type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async ({ event, step }: any) => {
-    const { prompt, model, projectId } = event.data;
-
+  async ({ step }: any) => {
     const plan = await step.run("plan", async () => {
       return { summary: "Plan created", files: [], components: [] };
     });
@@ -36,13 +33,10 @@ export const fixErrors = inngest.createFunction(
   {
     id: "fix-errors",
     name: "Fix Errors",
+    triggers: [{ event: "fix/requested" }],
   },
-  { event: "fix/requested" },
-  // @ts-expect-error Inngest v4 createFunction handler type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async ({ event, step }: any) => {
-    const { errors, projectId } = event.data;
-
+  async ({ step }: any) => {
     const fixes = await step.run("fix", async () => {
       return [];
     });

@@ -1,25 +1,26 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useProjectStore } from "@/stores/project-store";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Send,
-  Square,
-  RotateCcw,
-  Copy,
   Check,
-  Sparkles,
-  User,
+  Copy,
   Loader2,
+  RotateCcw,
+  Send,
+  Sparkles,
+  Square,
+  User,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useEffect,useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
+
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { useProjectStore } from "@/stores/project-store";
 
 export function ChatPanel() {
   const [copiedId, setCopiedId] = useState<string | null>(null);

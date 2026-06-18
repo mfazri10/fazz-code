@@ -1,5 +1,10 @@
 "use client";
 
+import { Clock, Code2, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -19,9 +23,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Code2, Plus, Clock, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
 
 // Placeholder project data
 const INITIAL_PROJECTS = [

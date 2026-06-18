@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useCallback,useEffect } from "react";
 
 type ShortcutHandler = () => void;
 
@@ -21,9 +21,6 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
         const metaMatch = shortcut.meta
           ? event.metaKey || event.ctrlKey
           : !event.metaKey && !event.ctrlKey;
-        const ctrlMatch = shortcut.ctrl
-          ? event.ctrlKey
-          : true;
         const shiftMatch = shortcut.shift
           ? event.shiftKey
           : !event.shiftKey;

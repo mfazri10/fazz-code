@@ -1,16 +1,17 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
-  ChevronRight,
   ChevronDown,
+  ChevronRight,
   File,
   Folder,
   FolderOpen,
   Plus,
   Trash2,
 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useCallback,useState } from "react";
+
+import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/stores/project-store";
 
 interface FileTreeNode {

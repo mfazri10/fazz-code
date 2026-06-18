@@ -1,11 +1,12 @@
 "use client";
 
-import { useProjectStore } from "@/stores/project-store";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { X, Save } from "lucide-react";
-import { useCallback, useState, useEffect } from "react";
 import Editor from "@monaco-editor/react";
+import { Save,X } from "lucide-react";
+import { useCallback, useEffect,useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useProjectStore } from "@/stores/project-store";
 
 export function EditorPanel() {
   const { files, activeFile, setActiveFile, updateFile } = useProjectStore();
