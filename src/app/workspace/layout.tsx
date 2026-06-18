@@ -1,6 +1,7 @@
 "use client";
 
 import { useDefaultLayout } from "react-resizable-panels";
+import { ChatPanel } from "@/components/chat-panel";
 import {
   ChevronDownIcon,
   FolderPlusIcon,
@@ -124,8 +125,8 @@ export default function WorkspaceLayout({
                 Chat
               </span>
             </div>
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-              Chat
+            <div className="flex-1 overflow-hidden">
+              <ChatPanel />
             </div>
           </div>
         </ResizablePanel>
