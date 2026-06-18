@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useProjectStore } from "@/stores/project-store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,11 +26,9 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
 
   const { messages, sendMessage, stop, regenerate, error } = useChat();
+  const { isGenerating, runStatus } = useProjectStore();
 
-  const isLoading =
-    messages.length > 0 && messages[messages.length - 1]?.role === "assistant"
-      ? false
-      : false;
+  const isLoading = isGenerating || (messages.length > 0 && messages[messages.length - 1]?.role !== "user");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +46,7 @@ export function ChatPanel() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     sendMessage({ text: input });
     setInput("");
   };
@@ -65,6 +64,17 @@ export function ChatPanel() {
         ?.filter((p) => p.type === "text")
         .map((p) => p.text || "")
         .join("") || ""
+    );
+  };
+
+  const getToolCalls = (message: { parts?: Array<{ type: string; toolName?: string; args?: Record<string, unknown> }> }) => {
+    return (
+      message.parts
+        ?.filter((p) => p.type === "tool-invocation")
+        .map((p) => ({
+          toolName: p.toolName || "unknown",
+          args: p.args,
+        })) || []
     );
   };
 
@@ -105,6 +115,21 @@ export function ChatPanel() {
               >
                 {message.role === "assistant" ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {/* Tool calls */}
+                    {getToolCalls(message).length > 0 && (
+                      <div className="mb-2 space-y-1">
+                        {getToolCalls(message).map((tc, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 text-xs text-muted-foreground bg-background/50 rounded px-2 py-1"
+                          >
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span className="font-mono">{tc.toolName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -168,6 +193,28 @@ export function ChatPanel() {
             </div>
           ))}
 
+          {isLoading && (
+            <div className="flex gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Loader2 className="h-4 w-4 text-primary animate-spin" />
+              </div>
+              <div className="rounded-lg bg-muted px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {runStatus === "generating"
+                    ? "Generating code..."
+                    : runStatus === "planning"
+                    ? "Planning..."
+                    : runStatus === "reviewing"
+                    ? "Reviewing..."
+                    : runStatus === "fixing"
+                    ? "Fixing errors..."
+                    : "Thinking..."}
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <p className="font-medium">Error</p>
@@ -188,10 +235,21 @@ export function ChatPanel() {
             rows={2}
           />
           <div className="flex flex-col gap-1">
-            <Button type="submit" size="icon" disabled={!input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-            {messages.length > 0 && (
+            {isLoading ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                onClick={stop}
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button type="submit" size="icon" disabled={!input.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+            {!isLoading && messages.length > 0 && (
               <Button
                 type="button"
                 variant="outline"
