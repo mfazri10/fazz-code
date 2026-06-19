@@ -40,6 +40,8 @@ import { useProjectStore } from "@/stores/project-store";
 type MobileTab = "chat" | "editor" | "preview";
 
 const MODELS = [
+  { id: "mimo-v2.5-pro", label: "MiMo v2.5 Pro" },
+  { id: "mimo-v2.5", label: "MiMo v2.5" },
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
   { id: "gpt-4o", label: "GPT-4o" },
   { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },

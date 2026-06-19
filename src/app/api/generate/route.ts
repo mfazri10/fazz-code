@@ -152,7 +152,7 @@ export async function POST(req: Request) {
         if (!skipReview) {
           send({ stage: "reviewing", status: "start" });
           try {
-            const reviewModel = model.includes("claude") ? "gpt-4o" : "claude-sonnet-4-20250514";
+            const reviewModel = model.includes("mimo") ? "mimo-v2.5" : "mimo-v2.5-pro";
             const fileContext = Object.entries(files).map(([p, c]) => `\n### ${p}\n\`\`\`\n${c}\n\`\`\``).join("\n");
 
             const result = await safeGenerate({

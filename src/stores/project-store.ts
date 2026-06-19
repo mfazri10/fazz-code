@@ -132,7 +132,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setRunStatus: (status) => set({ runStatus: status }),
 
   // Model selection
-  selectedModel: "claude-sonnet-4-20250514",
+  selectedModel: "mimo-v2.5-pro",
   setSelectedModel: (model) => set({ selectedModel: model }),
 
   // Persistence

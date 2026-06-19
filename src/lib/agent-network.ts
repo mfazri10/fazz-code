@@ -14,7 +14,7 @@ export interface NetworkOptions {
 
 export async function runNetwork({
   prompt,
-  model = "claude-sonnet-4-20250514",
+  model = "mimo-v2.5-pro",
   skipPlan = false,
   skipReview = false,
   maxFixIterations = 3,
