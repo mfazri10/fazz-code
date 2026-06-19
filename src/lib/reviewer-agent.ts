@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 
 import { getModel } from "@/lib/model-gateway";
+import { extractJsonObject, reviewResultSchema } from "@/lib/validations";
 
 const REVIEWER_SYSTEM_PROMPT = `You are Fazz Code Reviewer, an expert at reviewing code quality and suggesting improvements.
 
@@ -53,10 +54,10 @@ export async function runReviewer(
     prompt: `Review these files:${fileContext}`,
   });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse review JSON");
+  const parsed = reviewResultSchema.safeParse(extractJsonObject(result.text));
+  if (!parsed.success) {
+    throw new Error(`Invalid review structure: ${parsed.error.message}`);
   }
 
-  return JSON.parse(jsonMatch[0]) as ReviewResult;
+  return parsed.data;
 }
