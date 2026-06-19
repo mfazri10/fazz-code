@@ -1,8 +1,13 @@
-import { getTokenUsage,recordFailure, safeGenerate } from "@/lib/agent-safety";
+import { getTokenUsage, recordFailure, safeGenerate } from "@/lib/agent-safety";
 import { getSession } from "@/lib/auth-server";
 import { type PlanResult } from "@/lib/planner-agent";
 import { type ReviewResult } from "@/lib/reviewer-agent";
-import { generateSchema } from "@/lib/validations";
+import {
+  extractJsonObject,
+  generateSchema,
+  planResultSchema,
+  reviewResultSchema,
+} from "@/lib/validations";
 
 export const maxDuration = 300;
 
@@ -18,6 +23,15 @@ const REVIEWER_SYSTEM = `You are Fazz Code Reviewer. Output JSON:
 {"verdict":"approve|request_changes","issues":[{"file":"...","severity":"error|warning|info","detail":"...","suggestion":"..."}],"summary":"..."}
 Only valid JSON.`;
 
+/** Safely parse a model JSON response against a Zod schema; returns null on failure. */
+function safeParseJson<T>(text: string, schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false } }): T | null {
+  try {
+    const result = schema.safeParse(extractJsonObject(text));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -71,8 +85,8 @@ export async function POST(req: Request) {
               projectId,
               agentId: "planner",
             });
-            const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-            plan = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+            // Validate the model output against the schema instead of a greedy regex.
+            plan = safeParseJson<PlanResult>(result.text, planResultSchema);
             send({ stage: "planning", status: "done", plan, tokens: result.tokens });
           } catch (error) {
             recordFailure("planner");
@@ -83,7 +97,10 @@ export async function POST(req: Request) {
         // Stage 2: Generation signal
         send({ stage: "generating", status: "done" });
 
-        // Stage 3: Fix loop with circuit breaker
+        // Stage 3: Fix loop with circuit breaker.
+        // The server cannot run a build, so it applies one Fixer pass and returns
+        // the updated files. The client re-mounts them in WebContainer, re-checks,
+        // and calls /api/generate again with any remaining errors.
         let allErrors = inputErrors;
         let iteration = 0;
         while (iteration < maxFixIterations && allErrors.length > 0) {
@@ -100,16 +117,29 @@ export async function POST(req: Request) {
               agentId: "fixer",
             });
 
-            // Parse fixed files
+            // Parse fixed files and collect what changed.
             const codeBlockRegex = /```(\w+)\s+filename="([^"]+)"\n([\s\S]*?)```/g;
             let match;
+            const fixedFiles: Record<string, string> = {};
             while ((match = codeBlockRegex.exec(result.text)) !== null) {
               const [, , filePath, content] = match;
-              if (filePath && content) files[filePath] = content.trim();
+              if (filePath && content) {
+                files[filePath] = content.trim();
+                fixedFiles[filePath] = content.trim();
+              }
             }
 
-            allErrors = []; // In real impl, re-check errors
-            send({ stage: "fixing", status: "done", iteration: iteration + 1, tokens: result.tokens });
+            // Return the fixed files so the client can persist + re-check them.
+            send({
+              stage: "fixing",
+              status: "done",
+              iteration: iteration + 1,
+              files: fixedFiles,
+              tokens: result.tokens,
+            });
+
+            // Re-validation happens client-side; stop after applying this pass.
+            allErrors = [];
           } catch (error) {
             recordFailure("fixer");
             send({ stage: "fixing", status: "error", message: String(error) });
@@ -133,8 +163,7 @@ export async function POST(req: Request) {
               agentId: "reviewer",
             });
 
-            const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-            const review: ReviewResult | null = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+            const review = safeParseJson<ReviewResult>(result.text, reviewResultSchema);
             send({ stage: "reviewing", status: "done", review, tokens: result.tokens });
           } catch (error) {
             recordFailure("reviewer");
@@ -142,9 +171,10 @@ export async function POST(req: Request) {
           }
         }
 
-        // Token usage report
+        // Final payload: token usage + the full (possibly fixed) file set so the
+        // client can persist the result.
         const usage = getTokenUsage(projectId);
-        send({ stage: "done", status: "complete", tokenUsage: usage });
+        send({ stage: "done", status: "complete", files, tokenUsage: usage });
       } catch (error) {
         send({ stage: "error", message: String(error) });
       } finally {

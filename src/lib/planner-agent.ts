@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 
 import { getModel } from "@/lib/model-gateway";
+import { extractJsonObject, planResultSchema } from "@/lib/validations";
 
 const PLANNER_SYSTEM_PROMPT = `You are Fazz Code Planner, an expert at breaking down UI/app requests into structured plans.
 
@@ -51,10 +52,10 @@ export async function runPlanner(
     prompt: `User request: ${prompt}`,
   });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse plan JSON from response");
+  const parsed = planResultSchema.safeParse(extractJsonObject(result.text));
+  if (!parsed.success) {
+    throw new Error(`Invalid plan structure: ${parsed.error.message}`);
   }
 
-  return JSON.parse(jsonMatch[0]) as PlanResult;
+  return parsed.data;
 }

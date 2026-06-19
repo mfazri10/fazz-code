@@ -1,15 +1,26 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/fazzcode",
-  max: 20,                    // Maximum connections in pool
-  idleTimeoutMillis: 30000,   // Close idle connections after 30s
-  connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
-});
+// Reuse a single pool across hot reloads / module re-evaluations in dev so we
+// don't leak pools or stack duplicate process listeners.
+const globalForPg = globalThis as unknown as { __fazzPgPool?: Pool };
 
-// Graceful shutdown
-process.on("SIGINT", () => pool.end());
-process.on("SIGTERM", () => pool.end());
+const pool =
+  globalForPg.__fazzPgPool ??
+  new Pool({
+    connectionString:
+      process.env.DATABASE_URL ||
+      "postgresql://postgres:postgres@localhost:5432/fazzcode",
+    max: 20,                       // Maximum connections in pool
+    idleTimeoutMillis: 30000,      // Close idle connections after 30s
+    connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
+  });
+
+if (!globalForPg.__fazzPgPool) {
+  globalForPg.__fazzPgPool = pool;
+  // Register shutdown handlers exactly once.
+  process.on("SIGINT", () => pool.end());
+  process.on("SIGTERM", () => pool.end());
+}
 
 export default pool;
 
@@ -19,6 +30,22 @@ export async function query(text: string, params?: unknown[]) {
   try {
     const result = await client.query(text, params);
     return result;
+  } finally {
+    client.release();
+  }
+}
+
+/** Run a function inside a single transaction, committing on success. */
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
   } finally {
     client.release();
   }
@@ -144,20 +171,25 @@ export async function createMessage(
 
 // Version operations
 export async function createVersion(projectId: string, filesSnapshot: unknown, description?: string) {
-  // Get current max version
-  const maxResult = await query(
-    "SELECT MAX(version_number) as max_version FROM versions WHERE project_id = $1",
-    [projectId]
-  );
-  const nextVersion = (maxResult.rows[0]?.max_version || 0) + 1;
+  // Wrap in a transaction + advisory lock so concurrent saves can't compute the
+  // same next version number (which would violate the (project, version) uniqueness).
+  return withTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", [projectId]);
 
-  const result = await query(
-    `INSERT INTO versions (project_id, version_number, description, files_snapshot)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [projectId, nextVersion, description, JSON.stringify(filesSnapshot)]
-  );
-  return result.rows[0];
+    const maxResult = await client.query(
+      "SELECT MAX(version_number) as max_version FROM versions WHERE project_id = $1",
+      [projectId]
+    );
+    const nextVersion = (maxResult.rows[0]?.max_version || 0) + 1;
+
+    const result = await client.query(
+      `INSERT INTO versions (project_id, version_number, description, files_snapshot)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [projectId, nextVersion, description, JSON.stringify(filesSnapshot)]
+    );
+    return result.rows[0];
+  });
 }
 
 export async function getVersions(projectId: string, limit = 20, cursor?: string) {

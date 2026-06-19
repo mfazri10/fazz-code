@@ -7,7 +7,9 @@ import { chatSchema } from "@/lib/validations";
 
 export const maxDuration = 60;
 
-// In-memory rate limiter
+// In-memory rate limiter.
+// NOTE: per-instance only. For serverless / multi-instance, back this with a
+// shared store (Redis/Upstash) so the limit applies globally.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
@@ -49,15 +51,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const { messages, model } = parsed.data;
+  const { messages, model, files, activeFile, projectName } = parsed.data;
 
-  // Extract context from request body (optional fields)
-  const bodyObj = body as Record<string, unknown>;
-  const files = (bodyObj.files as Record<string, string>) || {};
-  const activeFile = bodyObj.activeFile as string | undefined;
-  const projectName = bodyObj.projectName as string | undefined;
-
-  // Build dynamic system prompt with full context awareness
+  // Build dynamic system prompt with full context awareness.
   const systemPrompt =
     Object.keys(files).length > 0
       ? buildFullSystemPrompt({

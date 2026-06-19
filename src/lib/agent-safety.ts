@@ -35,7 +35,7 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Don't retry on auth/validation errors
+      // Don't retry on auth/validation errors.
       if (lastError.message.includes("401") || lastError.message.includes("400")) {
         throw lastError;
       }
@@ -88,6 +88,11 @@ export function recordSuccess(agentId: string): void {
 
 /**
  * Token budget tracker — prevents runaway costs.
+ *
+ * NOTE: this state (along with the circuit breaker above and the chat route's
+ * rate limiter) is in-memory and therefore per-instance. On serverless /
+ * multi-instance deployments it should be backed by a shared store such as
+ * Redis/Upstash so limits and budgets apply globally.
  */
 const tokenUsage = new Map<string, { used: number; budget: number }>();
 
@@ -147,6 +152,8 @@ export async function safeGenerate(params: {
         model: getModel(model),
         system,
         prompt,
+        // Forward the signal so the timeout actually cancels a hung request.
+        abortSignal: controller.signal,
       });
       return res;
     } finally {
