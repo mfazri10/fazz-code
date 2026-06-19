@@ -38,8 +38,8 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
   },
 ];
 
-// Xiaomi uses OpenAI-compatible API
-const xiaomi = createOpenAI({
+// Xiaomi uses OpenAI-compatible API (chat completions only)
+const xiaomiProvider = createOpenAI({
   apiKey: process.env.XIAOMI_API_KEY || process.env.ANTHROPIC_API_KEY,
   baseURL: process.env.XIAOMI_BASE_URL || "https://token-plan-sgp.xiaomimimo.com/v1",
 });
@@ -52,7 +52,8 @@ export function getModel(modelId: string) {
 
   switch (model.provider) {
     case "xiaomi": {
-      return xiaomi(model.id);
+      // Force chat completions endpoint (not /responses)
+      return xiaomiProvider.chat(model.id);
     }
     case "anthropic": {
       const anthropic = createAnthropic({
