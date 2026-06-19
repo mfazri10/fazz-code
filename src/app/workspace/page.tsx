@@ -46,7 +46,6 @@ export default function WorkspacePage() {
     try {
       const project = await createNewProject(newName.trim());
 
-      // Apply template files
       const template = TEMPLATES.find((t) => t.id === selectedTemplate);
       if (template && Object.keys(template.files).length > 0) {
         for (const [path, content] of Object.entries(template.files)) {
@@ -69,18 +68,13 @@ export default function WorkspacePage() {
   }, [newName, selectedTemplate, createNewProject, router]);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Proyek Saya</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Bangun dan kelola aplikasi hasil AI kamu
-          </p>
-        </div>
+    <div className="mx-auto max-w-5xl px-6 py-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-lg font-semibold tracking-tight">Proyek Saya</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button size="sm">
+              <Plus className="mr-1.5 h-4 w-4" />
               New Project
             </Button>
           </DialogTrigger>
@@ -96,8 +90,6 @@ export default function WorkspacePage() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
-
-              {/* Template picker */}
               <div>
                 <p className="mb-2 text-xs font-medium text-muted-foreground">
                   Template
@@ -125,7 +117,6 @@ export default function WorkspacePage() {
                   ))}
                 </div>
               </div>
-
               <Button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
@@ -144,48 +135,43 @@ export default function WorkspacePage() {
       </div>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-xl border border-border/60 bg-muted/40"
+              className="h-24 animate-pulse rounded-xl border border-border/60 bg-muted/40"
             />
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-20 text-muted-foreground">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
-            <Code2 className="h-6 w-6 opacity-60" />
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-16 text-muted-foreground">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+            <Code2 className="h-5 w-5 opacity-60" />
           </div>
-          <p className="text-lg font-medium text-foreground">Belum ada proyek</p>
-          <p className="mt-1 text-sm">Buat proyek pertamamu untuk mulai membangun</p>
-          <Button className="mt-5" onClick={() => setDialogOpen(true)}>
+          <p className="font-medium text-foreground">Belum ada proyek</p>
+          <p className="mt-1 text-xs">Buat proyek pertamamu untuk mulai membangun</p>
+          <Button size="sm" className="mt-4" onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New Project
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
             <Card
               key={p.id}
               onClick={() => router.push(`/project/${p.id}`)}
               className="group cursor-pointer border-border/60 transition hover:border-primary/50 hover:shadow-md"
             >
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     <Code2 className="h-4 w-4" />
                   </div>
-                  <CardTitle className="text-base">{p.name}</CardTitle>
+                  <CardTitle className="text-sm">{p.name}</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent>
-                {p.description && (
-                  <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
-                    {p.description}
-                  </p>
-                )}
+              <CardContent className="pt-0">
                 <div className="flex items-center text-xs text-muted-foreground">
                   <Clock className="mr-1 h-3 w-3" />
                   {p.updatedAt.toLocaleDateString()}
