@@ -7,7 +7,7 @@ using `@mention` delegation instead of hardcoded sequential calls.
 
 > Why a separate Python service? The official Band SDK (`band-sdk`, import
 > `thenvoi`) is Python-only. The Next.js app stays as-is; this service runs
-> alongside it and (optionally) calls back into `/api/generate`.
+> alongside it and the Fixer calls back into `/api/generate` via a bridge tool.
 
 ## Architecture
 
@@ -19,6 +19,10 @@ using `@mention` delegation instead of hardcoded sequential calls.
   |     |                    @Reviewer       |
   |     +---@Planner--- Reviewer <-----+     |
   +------------------------------------------+
+                    |
+         Fixer.generate_app tool
+                    v
+     Next.js  POST /api/generate  (NDJSON stream)
 ```
 
 Each agent is a remote agent running here; it sends commands to Band over REST
@@ -39,11 +43,11 @@ and receives messages over WebSocket (handled automatically by the SDK).
 
 ## Per-agent model (bring-your-own-model)
 
-| Agent | Provider | Model |
-| --- | --- | --- |
-| Planner | Anthropic | `claude-sonnet-4-20250514` |
-| Fixer | Anthropic | `claude-sonnet-4-20250514` |
-| Reviewer | OpenAI | `gpt-4o` |
+| Agent | Provider | Model | Tools |
+| --- | --- | --- | --- |
+| Planner | Anthropic | `claude-sonnet-4-20250514` | — |
+| Fixer | OpenAI | `gpt-4o` | `generate_app` (bridge to `/api/generate`) |
+| Reviewer | OpenAI | `gpt-4o` | — |
 
 Edit these in `planner.py`, `fixer.py`, `reviewer.py`.
 
@@ -62,7 +66,7 @@ Prerequisites: **Python 3.11+** and [`uv`](https://docs.astral.sh/uv/).
 
 3. **Configure secrets**:
    ```bash
-   cp .env.example .env                       # fill LLM keys
+   cp .env.example .env                             # fill LLM keys + bridge
    cp agent_config.example.yaml agent_config.yaml   # fill agent_id + api_key
    ```
    Both files are git-ignored.
@@ -82,17 +86,21 @@ Prerequisites: **Python 3.11+** and [`uv`](https://docs.astral.sh/uv/).
 | --- | --- |
 | `band_agent.py` | Shared helper that builds + connects a Band agent |
 | `prompts.py` | System prompts (collaboration protocol) for each agent |
+| `bridge.py` | `generate_app` tool — streams `/api/generate` and returns files |
 | `planner.py` / `fixer.py` / `reviewer.py` | The three worker agents |
 | `run_all.py` | Runs all three agents concurrently |
-| `.env.example` | Band platform URLs + LLM keys |
+| `.env.example` | Band platform URLs, LLM keys, bridge config |
 | `agent_config.example.yaml` | Per-agent UUID + Band API key |
 
-## Optional: bridge back to the web app
+## Bridge to the web app
 
-Inside any worker you can call the existing Next.js endpoint instead of
-re-implementing logic, e.g. `POST http://localhost:3000/api/generate`, and
-relay the result into the Band room. See the integration page in Notion for
-details.
+The Fixer's `generate_app` tool (in `bridge.py`) POSTs to the existing Next.js
+`/api/generate` endpoint and parses its NDJSON stream, returning the final
+`files`, `plan`, and `review`. This reuses all the existing generation logic.
+
+`/api/generate` requires an authenticated session, so set `FAZZ_SESSION_COOKIE`
+in `.env` to a session cookie from a logged-in browser (or point `FAZZ_API_URL`
+at an instance with an internal auth bypass for local testing).
 
 ## References
 
