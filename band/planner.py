@@ -13,8 +13,7 @@ logger = logging.getLogger("planner")
 def build():
     return make_agent(
         config_key="planner",
-        provider="anthropic",
-        model="claude-sonnet-4-20250514",
+        model="mimo-v2.5-pro",
         system_prompt=PLANNER_SYSTEM,
     )
 

@@ -13,8 +13,7 @@ logger = logging.getLogger("reviewer")
 def build():
     return make_agent(
         config_key="reviewer",
-        provider="openai",
-        model="gpt-4o",
+        model="mimo-v2.5-pro",
         system_prompt=REVIEWER_SYSTEM,
     )
 

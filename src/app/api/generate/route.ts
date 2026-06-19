@@ -94,8 +94,47 @@ export async function POST(req: Request) {
           }
         }
 
-        // Stage 2: Generation signal
-        send({ stage: "generating", status: "done" });
+        // Stage 2: Generate code from the plan
+        if (plan && plan.files && plan.files.length > 0) {
+          send({ stage: "generating", status: "start" });
+          try {
+            const fileDescs = plan.files.map((f) => `- ${f.path}: ${f.description}`).join("\n");
+            const componentDescs = plan.components?.map((c) => `- ${c.name} (${c.file}): ${c.description}`).join("\n") ?? "";
+
+            const result = await safeGenerate({
+              model,
+              system: `You are Fazz Code Generator. Generate complete, working code files.
+Output each file in this exact format:
+\`\`\`tsx filename="path/to/file"\n// file content\n\`\`\`
+
+Rules:
+- Generate ALL files listed in the plan
+- Use TypeScript, Next.js App Router, Tailwind CSS, shadcn/ui components
+- Make code complete and functional, not placeholders
+- Import from @/components/ui/ for shadcn components`,
+              prompt: `User request: ${prompt}\n\nPlan summary: ${plan.summary}\n\nFiles to generate:\n${fileDescs}\n${componentDescs ? `\nComponents:\n${componentDescs}` : ""}`,
+              projectId,
+              agentId: "generator",
+            });
+
+            // Parse generated files
+            const codeBlockRegex = /```(\w+)\s+filename="([^"]+)"\n([\s\S]*?)```/g;
+            let match;
+            while ((match = codeBlockRegex.exec(result.text)) !== null) {
+              const [, , filePath, content] = match;
+              if (filePath && content) {
+                files[filePath] = content.trim();
+              }
+            }
+
+            send({ stage: "generating", status: "done", files, tokens: result.tokens });
+          } catch (error) {
+            recordFailure("generator");
+            send({ stage: "generating", status: "error", message: String(error) });
+          }
+        } else {
+          send({ stage: "generating", status: "done" });
+        }
 
         // Stage 3: Fix loop with circuit breaker.
         // The server cannot run a build, so it applies one Fixer pass and returns

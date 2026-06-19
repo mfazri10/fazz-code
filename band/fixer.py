@@ -1,8 +1,6 @@
 """Fixer agent — implements and fixes code from the Planner's plan.
 
-Uses the LangGraph/OpenAI adapter so it can call the `generate_app` tool, which
-bridges to Fazz Code's existing /api/generate pipeline instead of
-re-implementing generation here.
+Uses the `generate_app` tool which bridges to Fazz Code's /api/generate pipeline.
 """
 
 import asyncio
@@ -19,8 +17,7 @@ logger = logging.getLogger("fixer")
 def build():
     return make_agent(
         config_key="fixer",
-        provider="openai",
-        model="gpt-4o",
+        model="mimo-v2.5-pro",
         system_prompt=FIXER_SYSTEM,
         tools=[generate_app],
     )
