@@ -1,0 +1,12 @@
+# Per-agent credentials from the Band platform.
+# Create each agent at https://app.band.ai/agents (type: External Agent),
+# then copy its Agent UUID and API key (the API key is shown only once).
+planner:
+  agent_id: "<uuid-planner>"
+  api_key: "<key-planner>"
+fixer:
+  agent_id: "<uuid-fixer>"
+  api_key: "<key-fixer>"
+reviewer:
+  agent_id: "<uuid-reviewer>"
+  api_key: "<key-reviewer>"

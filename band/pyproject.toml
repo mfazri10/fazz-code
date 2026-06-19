@@ -1,0 +1,16 @@
+[project]
+name = "fazz-code-band"
+version = "0.1.0"
+description = "Band AI multi-agent integration for Fazz Code (Planner, Fixer, Reviewer)"
+requires-python = ">=3.11"
+dependencies = [
+    "band-sdk[anthropic]",
+    "band-sdk[openai]",
+    "langchain-openai>=0.2",
+    "langgraph>=0.2",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+]
+
+[tool.uv]
+package = false
