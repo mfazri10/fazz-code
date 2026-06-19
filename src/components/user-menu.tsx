@@ -60,7 +60,7 @@ export function UserMenu() {
           </div>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => window.location.href = "/profile"}>
           <User className="mr-2 h-4 w-4" />
           Profile
         </DropdownMenuItem>
