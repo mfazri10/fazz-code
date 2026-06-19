@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Clock, Code2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUp, Clock, Code2, LogIn, Plus, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useSession } from "@/lib/auth-client";
 
 // Placeholder project data
 const INITIAL_PROJECTS = [
@@ -59,6 +60,8 @@ const SUGGESTIONS = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.session;
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -86,7 +89,19 @@ export default function DashboardPage() {
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
+    if (!isLoggedIn) {
+      router.push("/login");
+      return;
+    }
     router.push(`/workspace?prompt=${encodeURIComponent(prompt.trim())}`);
+  };
+
+  const handleNewProjectClick = () => {
+    if (!isLoggedIn) {
+      router.push("/login");
+      return;
+    }
+    setIsDialogOpen(true);
   };
 
   return (
@@ -106,6 +121,7 @@ export default function DashboardPage() {
               Fazz Code
             </span>
           </div>
+          {isLoggedIn ? (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger>
               <Button size="sm">
@@ -134,6 +150,12 @@ export default function DashboardPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          ) : (
+            <Button size="sm" onClick={() => router.push("/login")}>
+              <LogIn className="mr-1.5 h-4 w-4" />
+              Login
+            </Button>
+          )}
         </div>
       </header>
 
@@ -184,8 +206,8 @@ export default function DashboardPage() {
                   disabled={!prompt.trim()}
                   onClick={handleGenerate}
                 >
-                  Generate
-                  <ArrowUp className="h-4 w-4" />
+                  {isLoggedIn ? "Generate" : "Login to Generate"}
+                  {isLoggedIn ? <ArrowUp className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -218,10 +240,19 @@ export default function DashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsDialogOpen(true)}
+              onClick={handleNewProjectClick}
             >
-              <Plus className="mr-1.5 h-4 w-4" />
-              New Project
+              {isLoggedIn ? (
+                <>
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  New Project
+                </>
+              ) : (
+                <>
+                  <LogIn className="mr-1.5 h-4 w-4" />
+                  Login
+                </>
+              )}
             </Button>
           </div>
 
@@ -236,9 +267,18 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm">
                 Buat proyek pertamamu untuk mulai membangun
               </p>
-              <Button className="mt-5" onClick={() => setIsDialogOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" />
-                New Project
+              <Button className="mt-5" onClick={handleNewProjectClick}>
+                {isLoggedIn ? (
+                  <>
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    New Project
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="mr-1.5 h-4 w-4" />
+                    Login
+                  </>
+                )}
               </Button>
             </div>
           ) : (
